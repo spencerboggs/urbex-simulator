@@ -7,71 +7,94 @@ using Debug = UnityEngine.Debug;
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement")]
+    // Base movement speed in units per second
     public float moveSpeed = 2.5f;
+    // Sprint speed multiplier
     public float sprintMultiplier = 2.5f;
+    // Height the player can jump
     public float jumpHeight = 1.5f;
+    // Gravity force applied to the player
     public float gravity = -10f;
 
     [Header("Sprint System")]
+    // Maximum sprint charge available
     public float maxSprintCharge = 10f;
+    // Rate at which sprint charge depletes when sprinting
     public float sprintDrainRate = 1.5f;
+    // Rate at which sprint charge regenerates when not sprinting
     public float sprintRegenRate = 0.5f;
+    // Minimum sprint charge required to start sprinting
     public float minSprintRequired = 3f;
 
+    // Current sprint charge level
     private float sprintCharge;
-
+    // Whether the player is currently exhausted (unable to sprint)
     private bool exhausted = false;
 
     [Header("Feel")]
+    // Small downward force to keep the player grounded when walking down slopes
     public float groundedStickForce = -2f;
+    // Multiplier for horizontal control while in the air (0 = no control, 1 = full control)
     public float airControlMultiplier = 0.6f;
+    // Multiplier for gravity when the player is falling (makes jumps feel snappier)
     public float fallMultiplier = 1.05f;
 
+    // Internal state
     private CharacterController controller;
     private Vector3 velocity;
 
     [Header("Crouch")]
+    // Multiplier for crouch height (scale factor)
     public float crouchHeightMultiplier = 0.5f;
 
+    // Original height of the character controller capsule
     private float originalHeight;
+    // Current height of the character controller capsule when crouching
     private float crouchHeight;
+    // Whether the player is currently crouching
     private bool isCrouching;
 
 
     void Start()
     {
+        // Get reference to the CharacterController component
         controller = GetComponent<CharacterController>();
+        // Initialize sprint charge to max at the start
         sprintCharge = maxSprintCharge;
+        // Store the original height of the character controller for crouching calculations
         originalHeight = controller.height;
+        // Calculate the crouch height based on the original height and the crouch multiplier
         crouchHeight = originalHeight * crouchHeightMultiplier;
     }
 
     void Update()
     {
+        // Check if the player is grounded
         bool isGrounded = controller.isGrounded;
 
+        // If grounded and "falling", apply a small downward force to keep the player "stuck" to the ground
         if (isGrounded && velocity.y < 0)
             velocity.y = groundedStickForce;
 
-        // --------------------
-        // INPUT
-        // --------------------
+        /* Input handling */
         Vector2 moveInput = Vector2.zero;
 
+        // Read movement input from WASD keys
         if (Keyboard.current.wKey.isPressed) moveInput.y += 1;
         if (Keyboard.current.sKey.isPressed) moveInput.y -= 1;
         if (Keyboard.current.dKey.isPressed) moveInput.x += 1;
         if (Keyboard.current.aKey.isPressed) moveInput.x -= 1;
 
+        // Set control vector to zero if no input to prevent unintended movement
         Vector3 noMovement = new Vector3(0f, 0f, 0f);
 
+        // Normalize movement input to prevent faster diagonal movement
         Vector3 moveDir =
             (transform.right * moveInput.x +
              transform.forward * moveInput.y).normalized;
 
-        // --------------------
-        // SPRINT STATE MACHINE (FIXED)
-        // --------------------
+        /* Sprint handling */
+        // Check if the player is trying to sprint (holding Left Shift)
         bool wantsToSprint = Keyboard.current.leftShiftKey.isPressed;
 
         // Exhaustion logic
@@ -81,65 +104,80 @@ public class PlayerMovement : MonoBehaviour
         if (sprintCharge >= minSprintRequired)
             exhausted = false;
 
+        // Player can sprint if they want to sprint and are not exhausted
         bool canStartSprint = !exhausted;
-
+        // Final sprinting state
         bool isSprinting = wantsToSprint && canStartSprint;
-
+        // Apply sprint multiplier to movement speed if sprinting
         float currentSpeed = moveSpeed * (isSprinting ? sprintMultiplier : 1f);
 
-        // --------------------
-        // CHARGE DRAIN / REGEN
-        // --------------------
+        // Charge and drain logic
         if (isSprinting && !noMovement.Equals(moveDir))
         {
+            // Drain sprint charge when sprinting and moving
             sprintCharge -= sprintDrainRate * Time.deltaTime;
-            // Debug log for sprint charge and states
+            /* DEBUG OUTPUT (REMOVE LATER) */
             Debug.Log(
                 $"[SPRINT] Charge={sprintCharge:F2} | Exhausted={exhausted} | Sprinting={isSprinting}"
             );
         }
         else
         {
+            // Regenerate sprint charge when not sprinting
             sprintCharge += sprintRegenRate * Time.deltaTime;
         }
 
+        // Clamp sprint charge to valid range
         sprintCharge = Mathf.Clamp(sprintCharge, 0f, maxSprintCharge);
 
-        // --------------------
-        // JUMP
-        // --------------------
+        /* Jump handling */
+        // Check if the player is trying to jump (pressing Space) and is grounded
         if (Keyboard.current.spaceKey.isPressed && isGrounded)
         {
+            // Calculate the initial jump velocity
             velocity.y = jumpHeight * Mathf.Sqrt(-gravity);
+            /* DEBUG OUTPUT (REMOVE LATER) */
             Debug.Log("Jump triggered");
         }
 
-        // --------------------
-        // CROUCH (FIXED ALIGNMENT)
-        // --------------------
+        // If the player hits their head on something while jumping, reset vertical velocity
+        if (controller.collisionFlags.HasFlag(CollisionFlags.Above) && velocity.y > 0)
+        {
+            velocity.y = 0f;
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log("Head collision detected, resetting vertical velocity");
+        }
+
+        /* Crouch handling */
+        // Check if the player is trying to crouch (holding Left Ctrl)
         bool crouchInput = Keyboard.current.leftCtrlKey.isPressed;
 
+        // Toggle crouch state when crouch input is pressed/released
         if (isGrounded && crouchInput)
         {
             isCrouching = true;
+            /* DEBUG OUTPUT (REMOVE LATER) */
             Debug.Log("Crouch initiated");
         }
-        
+
         if (!crouchInput && isCrouching)
         {
+            /* DEBUG OUTPUT (REMOVE LATER) */
             Debug.Log("Attempting to stand up from crouch");
             Debug.Log($"Can stand up: {CanStandUp()}");
             if (CanStandUp())
                 isCrouching = false;
         }
 
+        // Apply crouch/stand changes to the character controller height and center
         float targetHeight = isCrouching ? crouchHeight : originalHeight;
 
         // compute height delta BEFORE applying
         float previousHeight = controller.height;
 
         controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * 15f);
-        if (isCrouching) {
+        if (isCrouching)
+        {
             // When crouching, we want to lower the center to keep the bottom of the capsule fixed
             controller.center = new Vector3(0f, controller.height / 2f - 0.4f, 0f);
             // Scale the player down visually (optional, can be removed if not desired)
@@ -153,30 +191,34 @@ public class PlayerMovement : MonoBehaviour
             controller.center = new Vector3(0f, 0f, 0f);
         }
 
-        // IMPORTANT: keep bottom of capsule fixed to ground
+        // Keep bottom of capsule fixed to ground
         float heightDiff = controller.height - previousHeight;
         controller.center += new Vector3(0f, heightDiff / 2f, 0f);
 
-        // --------------------
-        // GRAVITY
-        // --------------------
+        /* Gravity application */
         float gravityScale = (velocity.y < 0) ? fallMultiplier : 1f;
         velocity.y += gravity * gravityScale * Time.deltaTime;
 
-        // --------------------
-        // MOVE
-        // --------------------
+        /* Movement application */
+        // Apply air control multiplier if not grounded
         float control = isGrounded ? 1f : airControlMultiplier;
-
+        // Calculate horizontal movement based on input, current speed, and control multiplier
         Vector3 horizontalMove = moveDir * currentSpeed * control;
 
+        // Store horizontal velocity for external access
+        velocity.x = horizontalMove.x;
+        velocity.z = horizontalMove.z;
+
+        // Combine horizontal movement with vertical velocity for final movement vector
         Vector3 finalMove =
             horizontalMove +
             new Vector3(0, velocity.y, 0);
 
+        // Move the character controller based on the final movement vector
         controller.Move(finalMove * Time.deltaTime);
     }
 
+    // Helper method to check if the player has room to stand up
     private bool CanStandUp()
     {
         // Just check if there's enough space above the player's head to stand up
@@ -185,11 +227,20 @@ public class PlayerMovement : MonoBehaviour
         return !Physics.SphereCast(rayOrigin, controller.radius, Vector3.up, out _, headClearance);
     }
 
+    // Get method for other scripts to check if the player is currently crouching
     public bool getIsCrouching()
     {
         return isCrouching;
     }
 
+    // Get method to retrieve the player's current forward velocity
+    public float GetForwardVelocity()
+    {
+        Vector3 horizontalVel = new Vector3(velocity.x, 0f, velocity.z);
+        return Vector3.Dot(horizontalVel, transform.forward);
+    }
+
+    // Set method to reset vertical velocity (used by climbing controller when finishing a climb)
     public void ResetVerticalVelocity()
     {
         velocity.y = 0f;

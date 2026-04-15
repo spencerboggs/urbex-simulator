@@ -8,36 +8,40 @@ using Debug = UnityEngine.Debug;
 public class ClimbingController : MonoBehaviour
 {
     [Header("Detection")]
+    // Distance to check for walls in front of the player
     public float wallCheckDistance = 0.6f;
+    // Heights at which to check for walls
     public float upCheckHeight = 1.3f;
     public float lowCheckHeight = 0.5f;
+    // Small offset to prevent starting raycasts inside walls
     public float skinWidth = 0.1f;
 
     [Header("Climb Offsets")]
-    public float forwardOffset = -0.8f;
+    // The amount of extra height the player needs to clear the wall
     public float heightOffset = 1.2f;
+    // Additional clearance height to ensure the player doesn't get stuck on the edge
     public float clearanceHeight = 1.2f;
 
     [Header("Climb")]
+    // Time it takes to complete the climb
     public float climbSpeed = 4f;
 
+    // Internal state
     private CharacterController controller;
     private PlayerMovement movement;
     private InputAction moveAction;
 
+    // Climbing state variables
     private bool isClimbing = false;
     private Vector3 climbTarget;
     private Vector3 climbStartPosition;
     private Vector3 climbMidPoint;
-    private int climbPhase = 0; // 0 = upward, 1 = forward
 
     void Start()
     {
         controller = GetComponent<CharacterController>();
         movement = GetComponent<PlayerMovement>();
 
-
-        // Get the move action from Input System
         var playerInput = GetComponent<PlayerInput>();
         if (playerInput != null)
         {
@@ -53,52 +57,34 @@ public class ClimbingController : MonoBehaviour
             return;
         }
 
-        // Only auto-mantle when not on ground AND pressing forward (W)
-        if (!controller.isGrounded && !movement.getIsCrouching())
+        if (!controller.isGrounded && !movement.getIsCrouching() && movement.GetForwardVelocity() > 0.1f)
         {
             DetectLedgeAndAutoClimb();
         }
     }
 
-
     void DetectLedgeAndAutoClimb()
     {
+        // Get the forward direction of the player
         Vector3 forward = transform.forward;
 
         // Start rays from slightly in front of the character to avoid starting inside walls
         float startOffset = skinWidth;
 
-        // Multiple detection points at different heights, offset forward slightly
+        // Detection points
         Vector3 lowOrigin = transform.position + Vector3.up * lowCheckHeight + forward * startOffset;
         Vector3 midOrigin = transform.position + Vector3.up * 1.0f + forward * startOffset;
         Vector3 upperOrigin = transform.position + Vector3.up * upCheckHeight + forward * startOffset;
 
-        // ----------------------------
-        // WALL IN FRONT CHECK using SphereCast for better reliability
-        // ----------------------------
+        /* Check if wall is in front */
         float sphereRadius = 0.2f;
         RaycastHit lowHit, midHit;
-
-        bool wallInFrontLow = Physics.SphereCast(
-            lowOrigin,
-            sphereRadius,
-            forward,
-            out lowHit,
-            wallCheckDistance
-        );
-
-        bool wallInFrontMid = Physics.SphereCast(
-            midOrigin,
-            sphereRadius,
-            forward,
-            out midHit,
-            wallCheckDistance
-        );
+        bool wallInFrontLow = Physics.SphereCast(lowOrigin, sphereRadius, forward, out lowHit, wallCheckDistance);
+        bool wallInFrontMid = Physics.SphereCast(midOrigin, sphereRadius, forward, out midHit, wallCheckDistance);
 
         // Use the closest wall hit
         RaycastHit wallHit = lowHit;
         bool wallInFront = wallInFrontLow;
-
         if (wallInFrontMid && (!wallInFrontLow || midHit.distance < lowHit.distance))
         {
             wallHit = midHit;
@@ -110,83 +96,98 @@ public class ClimbingController : MonoBehaviour
             wallInFront = true;
         }
 
-        // ----------------------------
-        // WALL ABOVE CHECK
-        // ----------------------------
-        bool wallAbove = Physics.SphereCast(
-            upperOrigin,
-            sphereRadius,
-            forward,
-            out RaycastHit aboveHit,
-            wallCheckDistance * 0.9f
-        );
+        if (!wallInFront) return;
 
-        // ----------------------------
-        // DEBUG OUTPUT
-        // ----------------------------
-        if (wallInFront)
+        // Check wall height relative to player
+        float wallHeightFromGround = wallHit.point.y - transform.position.y;
+
+        // Don't climb walls that are too low (player can just step up)
+        if (wallHeightFromGround < 0.4f)
         {
-            Debug.Log($"Wall detected at distance: {wallHit.distance:F2}m, height: {wallHit.point.y:F2}m");
-        }
-        else
-        {
-            Debug.Log("No wall detected");
-        }
-
-        // Draw sphere casts for visual debugging
-        Debug.DrawRay(lowOrigin, forward * wallCheckDistance, wallInFrontLow ? Color.green : Color.red);
-        Debug.DrawRay(midOrigin, forward * wallCheckDistance, wallInFrontMid ? Color.yellow : Color.red);
-        Debug.DrawRay(upperOrigin, forward * wallCheckDistance, wallAbove ? Color.blue : Color.gray);
-
-        // ----------------------------
-        // REQUIREMENTS TO CLIMB
-        // ----------------------------
-        if (!wallInFront)
-            return;
-
-        // Don't mantle if there's a wall above (too tall)
-        if (wallAbove)
-        {
-            Debug.Log("Wall continues above - too tall to mantle");
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Wall too low to climb: {wallHeightFromGround:F2}m");
             return;
         }
 
-        // Check if the wall is low enough to mantle over
-        float wallHeight = wallHit.point.y - transform.position.y;
-
-        if (wallHeight > upCheckHeight + 0.5f)
+        // Don't climb walls that are too high (above player's head)
+        if (wallHeightFromGround > upCheckHeight + 0.3f)
         {
-            Debug.Log($"Wall too high: {wallHeight:F2}m");
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Wall too high to climb: {wallHeightFromGround:F2}m (max: {upCheckHeight + 0.3f}m)");
             return;
         }
 
-        if (wallHeight < 0.3f)
+        /* Check for wall above - this is the key part for stepped walls */
+        // Raycast forward from above the wall to see if there's a wall further ahead
+        Vector3 forwardRayOrigin = wallHit.point + Vector3.up * 1.0f;
+        RaycastHit forwardWallHit;
+        bool hasForwardWall = Physics.Raycast(forwardRayOrigin, forward, out forwardWallHit, 1.2f);
+
+        // Also check directly above the wall
+        Vector3 aboveOrigin = wallHit.point + Vector3.up * 0.5f;
+        RaycastHit aboveHit;
+        bool hasWallAbove = Physics.Raycast(aboveOrigin, forward, out aboveHit, wallCheckDistance);
+
+        // Determine if we can climb (either no wall above, or there's a stepped wall further ahead)
+        bool canClimb = false;
+        float stepDepth = 0f;
+
+        if (!hasWallAbove)
         {
-            Debug.Log($"Wall too low: {wallHeight:F2}m");
+            // No wall above at all - easy climb
+            canClimb = true;
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log("No wall above - standard climb");
+        }
+        else if (hasForwardWall && forwardWallHit.distance > wallHit.distance + 0.2f)
+        {
+            // There's a wall above, but also a wall further ahead (stepped)
+            stepDepth = forwardWallHit.distance - wallHit.distance;
+
+            // Check if the stepped wall is too high
+            float steppedWallHeight = forwardWallHit.point.y - transform.position.y;
+            if (steppedWallHeight > upCheckHeight + 0.3f)
+            {
+                /* DEBUG OUTPUT (REMOVE LATER) */
+                Debug.Log($"Stepped wall too high: {steppedWallHeight:F2}m");
+                return;
+            }
+
+            canClimb = true;
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Stepped wall detected! Step depth: {stepDepth:F2}m");
+        }
+
+        if (!canClimb)
+        {
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log("Wall continues above - cannot climb");
             return;
         }
 
-        // ----------------------------
-        // FIND TOP SURFACE
-        // ----------------------------
+        /* Find the top surface */
+        // Search from either the original wall or the forward wall
+        Vector3 searchOrigin = hasForwardWall && stepDepth > 0.2f ? forwardWallHit.point : wallHit.point;
+        searchOrigin += forward * 0.1f; // Small forward offset
+
         RaycastHit topHit = new RaycastHit();
         bool foundSurface = false;
+        float surfaceHeight = 0f;
 
-        // Start scanning from above the wall hit point
-        float scanStartY = Mathf.Max(wallHit.point.y + 0.3f, transform.position.y + 0.5f);
-
-        for (float offset = 0.3f; offset <= 1.8f; offset += 0.3f)
+        // Cast upward to find where the wall ends, then raycast down
+        for (float yOffset = 0.5f; yOffset <= 2.0f; yOffset += 0.3f)
         {
-            Vector3 scanOrigin = new Vector3(wallHit.point.x, scanStartY + offset, wallHit.point.z) + forward * 0.2f;
+            Vector3 rayStart = searchOrigin + Vector3.up * yOffset;
 
-            if (Physics.Raycast(scanOrigin, Vector3.down, out topHit, 2.0f))
+            if (Physics.Raycast(rayStart, Vector3.down, out topHit, 2.0f))
             {
-                // Make sure we found the top of the wall, not something else
-                if (Mathf.Abs(topHit.point.x - wallHit.point.x) < 0.5f &&
-                    Mathf.Abs(topHit.point.z - wallHit.point.z) < 0.5f)
+                // Check if this surface is above the original wall
+                if (topHit.point.y > wallHit.point.y + 0.2f)
                 {
+                    surfaceHeight = topHit.point.y;
                     foundSurface = true;
-                    Debug.Log($"Found surface at offset {offset}");
+                    /* DEBUG OUTPUT (REMOVE LATER) */
+                    Debug.Log($"Found surface at height: {surfaceHeight:F2}m");
                     break;
                 }
             }
@@ -194,116 +195,141 @@ public class ClimbingController : MonoBehaviour
 
         if (!foundSurface)
         {
+            /* DEBUG OUTPUT (REMOVE LATER) */
             Debug.Log("No top surface found");
             return;
         }
 
-        // Check if the surface is at a reasonable height to climb onto
-        float surfaceHeight = topHit.point.y - transform.position.y;
+        // Calculate total height the player needs to climb
+        float totalClimbHeight = surfaceHeight - transform.position.y;
 
-        if (surfaceHeight < 0.4f)
+        // Check if the climb height is reasonable
+        if (totalClimbHeight > 1.5f)
         {
-            Debug.Log($"Surface too low: {surfaceHeight:F2}m");
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Climb height too high: {totalClimbHeight:F2}m (max: 1.5m)");
             return;
         }
 
-        if (surfaceHeight > 1.8f)
+        if (totalClimbHeight < 0.4f)
         {
-            Debug.Log($"Surface too high: {surfaceHeight:F2}m");
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Climb height too low: {totalClimbHeight:F2}m - should just step up");
             return;
         }
 
-        // ----------------------------
-        // FINAL TARGET - Position on top of the ledge
-        // ----------------------------
-        climbTarget = topHit.point + Vector3.up * 0.2f + forward * forwardOffset;
-
-        // Make sure the target position has clearance
-        Vector3 clearanceCheck = climbTarget + Vector3.up;
-        if (Physics.CheckSphere(clearanceCheck, 0.4f))
+        // Check if the surface is too steep
+        float slopeAngle = Vector3.Angle(topHit.normal, Vector3.up);
+        if (slopeAngle > 50f)
         {
-            Debug.Log("No head clearance at target");
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Surface too steep: {slopeAngle:F2}°");
             return;
         }
 
-        Debug.DrawLine(wallHit.point, topHit.point, Color.blue);
-        Debug.Log($"CLIMB TRIGGERED - Wall height: {wallHeight:F2}m, Surface height: {surfaceHeight:F2}m");
+        // Calculate target position
+        if (totalClimbHeight < 0.8f)
+        {
+            // For lower walls (waist/chest height), just do a quick vault
+            climbTarget = topHit.point + Vector3.up * 0.1f;
+            climbTarget += forward * 0.5f; // Move further forward for vault
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Quick vault - height: {totalClimbHeight:F2}m");
+        }
+        else
+        {
+            // For higher walls, do a full climb
+            climbTarget = topHit.point + Vector3.up * 0.2f;
 
+            // Add forward offset based on situation
+            if (hasForwardWall && stepDepth > 0.2f)
+            {
+                climbTarget += forward * 0.3f;
+            }
+            else
+            {
+                climbTarget += forward * 0.4f;
+            }
+            /* DEBUG OUTPUT (REMOVE LATER) */
+            Debug.Log($"Full climb - height: {totalClimbHeight:F2}m");
+        }
+
+        /* DEBUG OUTPUT (REMOVE LATER) */
+        Debug.Log($"CLIMB TRIGGERED - Wall height: {wallHeightFromGround:F2}m, Surface height: {surfaceHeight:F2}m, Total climb: {totalClimbHeight:F2}m");
         StartClimb();
     }
 
     void StartClimb()
     {
         isClimbing = true;
-        climbPhase = 0; // Start with upward phase
         climbStartPosition = transform.position;
 
-        // Calculate the upward target - climb HIGHER before moving forward
-        Vector3 forward = transform.forward;
-        Vector3 wallTop = climbTarget - forward * forwardOffset; // The top edge of the wall
+        // Simplify the climb for lower walls
+        float totalClimbHeight = climbTarget.y - climbStartPosition.y;
 
-        // Increased upward height by adding extra clearance (was 0.5f, now 0.8f)
-        climbMidPoint = new Vector3(climbStartPosition.x, wallTop.y + clearanceHeight, climbStartPosition.z);
+        if (totalClimbHeight < 0.8f)
+        {
+            // For quick vaults, just go straight to the target
+            climbMidPoint = climbTarget;
+        }
+        else
+        {
+            // For full climbs, create an arc
+            Vector3 forward = transform.forward;
+            Vector3 wallTop = climbTarget - forward;
+            climbMidPoint = new Vector3(climbStartPosition.x, wallTop.y + clearanceHeight, climbStartPosition.z);
+        }
 
         if (movement != null)
             movement.enabled = false;
 
         controller.enabled = false;
 
-        Debug.Log("AUTO MANTLE STARTED - Phase 0: Upward");
+        /* DEBUG OUTPUT (REMOVE LATER) */
+        Debug.Log($"MANTLE STARTED - Type: {(totalClimbHeight < 0.8f ? "Quick vault" : "Full climb")}");
     }
 
     void PerformClimb()
     {
-        if (climbPhase == 0)
+        float totalClimbHeight = climbTarget.y - climbStartPosition.y;
+
+        if (totalClimbHeight < 0.8f)
         {
-            // PHASE 1: Move straight UP to clear the wall
+            // Simple linear climb for quick vaults
+            transform.position = Vector3.MoveTowards(transform.position, climbTarget, climbSpeed * Time.deltaTime);
+
+            if (Vector3.Distance(transform.position, climbTarget) < 0.05f)
+            {
+                FinishClimb();
+            }
+        }
+        else
+        {
+            // Arced climb for higher walls
             Vector3 upwardTarget = new Vector3(climbStartPosition.x, climbMidPoint.y, climbStartPosition.z);
             transform.position = Vector3.MoveTowards(
                 transform.position,
-                upwardTarget,
+                upwardTarget + clearanceHeight * Vector3.up,
                 climbSpeed * Time.deltaTime
             );
 
             if (Vector3.Distance(transform.position, upwardTarget) < 0.05f)
             {
-                climbPhase = 1;
-                Debug.Log("MANTLE PHASE 1 COMPLETE - Phase 2: Forward");
-            }
-        }
-        else if (climbPhase == 1)
-        {
-            Vector3 target = new Vector3(
-                climbTarget.x,
-                climbTarget.y + clearanceHeight,
-                climbTarget.z
-            );
-
-            transform.position = Vector3.MoveTowards(
-                transform.position,
-                target,
-                climbSpeed * Time.deltaTime
-            );
-
-            if (Vector3.Distance(transform.position, target) < 0.05f)
-            {
                 FinishClimb();
             }
         }
-
     }
 
     void FinishClimb()
     {
         isClimbing = false;
-
         controller.enabled = true;
 
         if (movement != null)
             movement.ResetVerticalVelocity();
-            movement.enabled = true;
+        movement.enabled = true;
 
+        /* DEBUG OUTPUT (REMOVE LATER) */
         Debug.Log("MANTLE COMPLETE");
     }
-
 }
