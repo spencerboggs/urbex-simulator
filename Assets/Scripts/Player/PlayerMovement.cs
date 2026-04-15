@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Debug = UnityEngine.Debug;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
@@ -28,10 +30,20 @@ public class PlayerMovement : MonoBehaviour
     private CharacterController controller;
     private Vector3 velocity;
 
+    [Header("Crouch")]
+    public float crouchHeightMultiplier = 0.5f;
+
+    private float originalHeight;
+    private float crouchHeight;
+    private bool isCrouching;
+
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
         sprintCharge = maxSprintCharge;
+        originalHeight = controller.height;
+        crouchHeight = originalHeight * crouchHeightMultiplier;
     }
 
     void Update()
@@ -51,6 +63,8 @@ public class PlayerMovement : MonoBehaviour
         if (Keyboard.current.dKey.isPressed) moveInput.x += 1;
         if (Keyboard.current.aKey.isPressed) moveInput.x -= 1;
 
+        Vector3 noMovement = new Vector3(0f, 0f, 0f);
+
         Vector3 moveDir =
             (transform.right * moveInput.x +
              transform.forward * moveInput.y).normalized;
@@ -69,18 +83,18 @@ public class PlayerMovement : MonoBehaviour
 
         bool canStartSprint = !exhausted;
 
-        bool isSprinting = wantsToSprint && canStartSprint && isGrounded;
+        bool isSprinting = wantsToSprint && canStartSprint;
 
         float currentSpeed = moveSpeed * (isSprinting ? sprintMultiplier : 1f);
 
         // --------------------
         // CHARGE DRAIN / REGEN
         // --------------------
-        if (isSprinting)
+        if (isSprinting && !noMovement.Equals(moveDir))
         {
             sprintCharge -= sprintDrainRate * Time.deltaTime;
             // Debug log for sprint charge and states
-            UnityEngine.Debug.Log(
+            Debug.Log(
                 $"[SPRINT] Charge={sprintCharge:F2} | Exhausted={exhausted} | Sprinting={isSprinting}"
             );
         }
@@ -94,11 +108,54 @@ public class PlayerMovement : MonoBehaviour
         // --------------------
         // JUMP
         // --------------------
-        if (Keyboard.current.spaceKey.wasPressedThisFrame && isGrounded)
+        if (Keyboard.current.spaceKey.isPressed && isGrounded)
         {
             velocity.y = jumpHeight * Mathf.Sqrt(-gravity);
-            UnityEngine.Debug.Log("Jump triggered");
+            Debug.Log("Jump triggered");
         }
+
+        // --------------------
+        // CROUCH (FIXED ALIGNMENT)
+        // --------------------
+        bool crouchInput = Keyboard.current.leftCtrlKey.isPressed;
+
+        if (isGrounded && crouchInput)
+        {
+            isCrouching = true;
+            Debug.Log("Crouch initiated");
+        }
+        
+        if (!crouchInput && isCrouching)
+        {
+            Debug.Log("Attempting to stand up from crouch");
+            Debug.Log($"Can stand up: {CanStandUp()}");
+            if (CanStandUp())
+                isCrouching = false;
+        }
+
+        float targetHeight = isCrouching ? crouchHeight : originalHeight;
+
+        // compute height delta BEFORE applying
+        float previousHeight = controller.height;
+
+        controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * 15f);
+        if (isCrouching) {
+            // When crouching, we want to lower the center to keep the bottom of the capsule fixed
+            controller.center = new Vector3(0f, controller.height / 2f - 0.4f, 0f);
+            // Scale the player down visually (optional, can be removed if not desired)
+            transform.localScale = new Vector3(1f, crouchHeightMultiplier, 1f);
+        }
+        else
+        {
+            // When standing up, reset the scale and adjust the center to keep the bottom fixed
+            transform.localScale = Vector3.one;
+            // Adjust center to keep bottom fixed when standing up
+            controller.center = new Vector3(0f, 0f, 0f);
+        }
+
+        // IMPORTANT: keep bottom of capsule fixed to ground
+        float heightDiff = controller.height - previousHeight;
+        controller.center += new Vector3(0f, heightDiff / 2f, 0f);
 
         // --------------------
         // GRAVITY
@@ -118,5 +175,23 @@ public class PlayerMovement : MonoBehaviour
             new Vector3(0, velocity.y, 0);
 
         controller.Move(finalMove * Time.deltaTime);
+    }
+
+    private bool CanStandUp()
+    {
+        // Just check if there's enough space above the player's head to stand up
+        float headClearance = originalHeight - crouchHeight;
+        Vector3 rayOrigin = transform.position + Vector3.up * crouchHeight;
+        return !Physics.SphereCast(rayOrigin, controller.radius, Vector3.up, out _, headClearance);
+    }
+
+    public bool getIsCrouching()
+    {
+        return isCrouching;
+    }
+
+    public void ResetVerticalVelocity()
+    {
+        velocity.y = 0f;
     }
 }
