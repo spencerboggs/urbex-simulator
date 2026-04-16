@@ -22,7 +22,7 @@ public class PlayerMovement : MonoBehaviour
     // Rate at which sprint charge depletes when sprinting
     public float sprintDrainRate = 1.5f;
     // Rate at which sprint charge regenerates when not sprinting
-    public float sprintRegenRate = 0.5f;
+    public float sprintRegenRate = 1f;
     // Minimum sprint charge required to start sprinting
     public float minSprintRequired = 3f;
 
@@ -54,6 +54,8 @@ public class PlayerMovement : MonoBehaviour
     // Whether the player is currently crouching
     private bool isCrouching;
 
+    /* HUD Elements */
+    public PlayerHUD hud;
 
     void Start()
     {
@@ -216,6 +218,10 @@ public class PlayerMovement : MonoBehaviour
 
         // Move the character controller based on the final movement vector
         controller.Move(finalMove * Time.deltaTime);
+
+
+        /* HUD Updates */
+        hud.SetStamina(sprintCharge / maxSprintCharge);
     }
 
     // Helper method to check if the player has room to stand up

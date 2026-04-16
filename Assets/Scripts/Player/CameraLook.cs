@@ -24,8 +24,8 @@ public class CameraLook : MonoBehaviour
     {
         // Read mouse movement input
         Vector2 mouseDelta = Mouse.current.delta.ReadValue();
-        float mouseX = mouseDelta.x * mouseSensitivity * Time.deltaTime;
-        float mouseY = mouseDelta.y * mouseSensitivity * Time.deltaTime;
+        float mouseX = mouseDelta.x * mouseSensitivity;
+        float mouseY = mouseDelta.y * mouseSensitivity;
 
         // Vertical look (pitch)
         xRotation -= mouseY;
