@@ -19,7 +19,7 @@ public class PlayerHUD : MonoBehaviour
         {
             staminaFill.style.backgroundColor = Color.green;
         }
-        else if (percent > 0.3f)
+        else if (percent > 0.28f)
         {
             staminaFill.style.backgroundColor = Color.yellow;
         }

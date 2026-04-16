@@ -4355,17 +4355,9 @@ PrefabInstance:
       propertyPath: hud
       value: 
       objectReference: {fileID: 887096875}
-    - target: {fileID: 1701095863598958817, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
-      propertyPath: sprintRegenRate
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 4269007787301066919, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
       propertyPath: m_Name
       value: Player
-      objectReference: {fileID: 0}
-    - target: {fileID: 5180595535525528092, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
-      propertyPath: m_StepOffset
-      value: 0.3
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

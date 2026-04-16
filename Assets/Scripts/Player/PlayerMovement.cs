@@ -12,9 +12,9 @@ public class PlayerMovement : MonoBehaviour
     // Sprint speed multiplier
     public float sprintMultiplier = 2.5f;
     // Height the player can jump
-    public float jumpHeight = 1.5f;
+    public float jumpHeight = 1.8f;
     // Gravity force applied to the player
-    public float gravity = -10f;
+    public float gravity = -20f;
 
     [Header("Sprint System")]
     // Maximum sprint charge available
@@ -25,6 +25,10 @@ public class PlayerMovement : MonoBehaviour
     public float sprintRegenRate = 1f;
     // Minimum sprint charge required to start sprinting
     public float minSprintRequired = 3f;
+    // No stamina jump multiplier (percentage of normal jump height when stamina is depleted)
+    public float noStaminaJumpMultiplier = 0.75f;
+    // Stamina decay jump multiplier (how much percent stamina is lost when jumping)
+    public float jumpStaminaCostPercent = 0.1f;
 
     // Current sprint charge level
     private float sprintCharge;
@@ -136,8 +140,19 @@ public class PlayerMovement : MonoBehaviour
         // Check if the player is trying to jump (pressing Space) and is grounded
         if (Keyboard.current.spaceKey.isPressed && isGrounded)
         {
-            // Calculate the initial jump velocity
-            velocity.y = jumpHeight * Mathf.Sqrt(-gravity);
+            if (sprintCharge < minSprintRequired)
+            {
+                // Jump 0.75 height if sprint charge is low to allow for some mobility even when exhausted
+                velocity.y = jumpHeight * noStaminaJumpMultiplier * Mathf.Sqrt(-gravity);
+            }
+            else
+            {
+                // Calculate the initial jump velocity
+                velocity.y = jumpHeight * Mathf.Sqrt(-gravity);
+                // Subtract a small amount from the stamina to prevent infinite jumping
+                sprintCharge = Mathf.Max(0f, sprintCharge - maxSprintCharge * jumpStaminaCostPercent);
+            }
+            
             /* DEBUG OUTPUT (REMOVE LATER) */
             Debug.Log("Jump triggered");
         }
@@ -218,7 +233,6 @@ public class PlayerMovement : MonoBehaviour
 
         // Move the character controller based on the final movement vector
         controller.Move(finalMove * Time.deltaTime);
-
 
         /* HUD Updates */
         hud.SetStamina(sprintCharge / maxSprintCharge);

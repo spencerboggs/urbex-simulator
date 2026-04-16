@@ -9,7 +9,7 @@ public class CameraLook : MonoBehaviour
 
     [Header("Settings")]
     // Mouse sensitivity for looking around
-    public float mouseSensitivity = 100f;
+    public float mouseSensitivity = 0.3f;
 
     // Current vertical rotation (pitch) of the camera
     float xRotation = 0f;

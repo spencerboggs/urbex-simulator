@@ -1,7 +1,7 @@
 #staminaBar {
     position: absolute;
     bottom: 70px;
-    left: 70px;
+    left: 90px;
     width: 400px;
     height: 18px;
     background-color: #222;
