@@ -140,7 +140,7 @@ public class PlayerMovement : MonoBehaviour
         // Check if the player is trying to jump (pressing Space) and is grounded
         if (Keyboard.current.spaceKey.isPressed && isGrounded)
         {
-            if (sprintCharge < minSprintRequired)
+            if (exhausted)
             {
                 // Jump 0.75 height if sprint charge is low to allow for some mobility even when exhausted
                 velocity.y = jumpHeight * noStaminaJumpMultiplier * Mathf.Sqrt(-gravity);
