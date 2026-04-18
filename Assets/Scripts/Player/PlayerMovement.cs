@@ -59,7 +59,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isCrouching;
 
     /* HUD Elements */
-    public PlayerHUD hud;
+    // public PlayerHUD hud;
 
     void Start()
     {
@@ -235,7 +235,7 @@ public class PlayerMovement : MonoBehaviour
         controller.Move(finalMove * Time.deltaTime);
 
         /* HUD Updates */
-        hud.SetStamina(sprintCharge / maxSprintCharge);
+        // hud.SetStamina(sprintCharge / maxSprintCharge);
     }
 
     // Helper method to check if the player has room to stand up
@@ -251,6 +251,17 @@ public class PlayerMovement : MonoBehaviour
     public bool getIsCrouching()
     {
         return isCrouching;
+    }
+
+    
+    public float GetSprintCharge()
+    {
+        return sprintCharge;
+    }
+
+    public float GetMaxSprintCharge()
+    {
+        return maxSprintCharge;
     }
 
     // Get method to retrieve the player's current forward velocity

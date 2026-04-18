@@ -1239,6 +1239,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1897974661}
   m_LocalEulerAnglesHint: {x: -20, y: 0, z: 0}
+--- !u!1 &393136716 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4269007787301066919, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
+  m_PrefabInstance: {fileID: 8223822293006141094}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &393136724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 393136716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e3726a0c5323d84482b82992507e76e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHUDController
+  hud: {fileID: 887096875}
 --- !u!1 &393606321
 GameObject:
   m_ObjectHideFlags: 0
@@ -4311,6 +4329,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 111782049185572510, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
+      propertyPath: climbSpeed
+      value: 4
+      objectReference: {fileID: 0}
     - target: {fileID: 1456765834341595160, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -4362,7 +4384,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4269007787301066919, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 393136724}
   m_SourcePrefab: {fileID: 100100000, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

@@ -155,11 +155,13 @@ MonoBehaviour:
   sprintDrainRate: 1.5
   sprintRegenRate: 1
   minSprintRequired: 3
+  noStaminaJumpMultiplier: 0.75
+  jumpStaminaCostPercent: 0.1
   groundedStickForce: -2
   airControlMultiplier: 0.6
   fallMultiplier: 1.05
   crouchHeightMultiplier: 0.5
-  hud: {fileID: 7760993966095636435, guid: 51944dfb9db669b40804c36ea06d5cb7, type: 3}
+  hud: {fileID: 0}
 --- !u!114 &111782049185572510
 MonoBehaviour:
   m_ObjectHideFlags: 0

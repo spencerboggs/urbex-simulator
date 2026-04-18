@@ -223,7 +223,7 @@ public class ClimbingController : MonoBehaviour
         if (slopeAngle > 50f)
         {
             /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Surface too steep: {slopeAngle:F2}°");
+            Debug.Log($"Surface too steep: {slopeAngle:F2}ï¿½");
             return;
         }
 
