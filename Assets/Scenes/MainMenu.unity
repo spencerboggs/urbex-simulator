@@ -2824,6 +2824,7 @@ GameObject:
   - component: {fileID: 1095353618}
   - component: {fileID: 1095353617}
   - component: {fileID: 1095353625}
+  - component: {fileID: 1095353626}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -2850,7 +2851,7 @@ MonoBehaviour:
   _enableIpv6: 1
   _ipv6BindAddress: 
   _port: 7770
-  _maximumClients: 4095
+  _maximumClients: 8
   _clientAddress: localhost
 --- !u!114 &1095353618
 MonoBehaviour:
@@ -2999,6 +3000,22 @@ MonoBehaviour:
   _playerPrefab: {fileID: 2723982658518787085, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
   _addToDefaultScene: 1
   Spawns: []
+--- !u!114 &1095353626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1095353616}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1e2d3c4b5a69788796a5b4c3d2e1f00, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkSessionController
+  _networkManager: {fileID: 1095353623}
+  _gameplayPlayerPrefab: {fileID: 2723982658518787085, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
+  _maxPlayers: 8
+  _enterLobbyAfterHost: 1
 --- !u!1 &1104239109
 GameObject:
   m_ObjectHideFlags: 0
@@ -4436,27 +4453,14 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2083889787}
-  - component: {fileID: 2083889786}
+  - component: {fileID: 2083889788}
   m_Layer: 0
-  m_Name: NetworkStarter
+  m_Name: MainMenuUI
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &2083889786
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2083889785}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a82e55168922ec41923397ddcd856c4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NetworkStarter
-  _networkManager: {fileID: 1095353623}
 --- !u!4 &2083889787
 Transform:
   m_ObjectHideFlags: 0
@@ -4472,6 +4476,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2083889788
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2083889785}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dc1d85fc3523ba4595095b1e994557c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MainMenuUI
+  _session: {fileID: 0}
+  _mainPanel: {fileID: 0}
+  _playPanel: {fileID: 0}
+  _joinAddressInput: {fileID: 0}
+  _playButton: {fileID: 0}
+  _quitButton: {fileID: 0}
+  _playMenuHostButton: {fileID: 0}
+  _playMenuJoinButton: {fileID: 0}
+  _playMenuBackButton: {fileID: 0}
+  _generateDefaultUiIfEmpty: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

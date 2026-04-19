@@ -5,6 +5,13 @@ using UnityEngine;
 [DefaultExecutionOrder(-50)]
 public sealed class PlayerLocalControls : NetworkBehaviour
 {
+    private bool IsStagingOrMenuScene()
+    {
+        // Use the object's scene — active scene can still be the previous scene for a frame after FishNet loads World.
+        string n = gameObject.scene.name;
+        return n == NetworkSceneFlow.Lobby || n == NetworkSceneFlow.MainMenu;
+    }
+
     public override void OnStartClient()
     {
         base.OnStartClient();
@@ -12,16 +19,24 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         if (IsOwner)
         {
             if (TryGetComponent(out PlayerMovement movement))
-                movement.enabled = true;
+                movement.enabled = !IsStagingOrMenuScene();
             if (TryGetComponent(out CameraLook look))
-                look.enabled = true;
+                look.enabled = !IsStagingOrMenuScene();
             if (TryGetComponent(out ClimbingController climbing))
-                climbing.enabled = true;
+                climbing.enabled = !IsStagingOrMenuScene();
             if (TryGetComponent(out PlayerHUDController hud))
-                hud.enabled = true;
+                hud.enabled = !IsStagingOrMenuScene();
 
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            if (IsStagingOrMenuScene())
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            else
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
         else
         {
