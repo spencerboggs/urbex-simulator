@@ -14,12 +14,6 @@ public class CameraLook : MonoBehaviour
     // Current vertical rotation (pitch) of the camera
     float xRotation = 0f;
 
-    void Start()
-    {
-        // Lock the cursor to the center of the screen and hide it
-        Cursor.lockState = CursorLockMode.Locked;
-    }
-
     void Update()
     {
         // Read mouse movement input

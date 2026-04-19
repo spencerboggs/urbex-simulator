@@ -5,14 +5,28 @@ public class PlayerHUD : MonoBehaviour
 {
     private VisualElement staminaFill;
 
-    private void Start()
+    private void TryBindStaminaFill()
     {
-        var root = GetComponent<UIDocument>().rootVisualElement;
+        if (staminaFill != null)
+            return;
+
+        var doc = GetComponent<UIDocument>();
+        if (doc == null)
+            return;
+
+        var root = doc.rootVisualElement;
+        if (root == null)
+            return;
+
         staminaFill = root.Q<VisualElement>("staminaFill");
     }
 
     public void SetStamina(float percent)
     {
+        TryBindStaminaFill();
+        if (staminaFill == null)
+            return;
+
         percent = Mathf.Clamp01(percent);
         staminaFill.style.width = Length.Percent(percent * 100f);
         if (percent > 0.5f)
