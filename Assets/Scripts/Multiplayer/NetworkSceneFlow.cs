@@ -20,7 +20,7 @@ public static class NetworkSceneFlow
         networkManager.SceneManager.LoadGlobalScenes(data);
     }
 
-    // Host-only progression into the match. Assigns the player prefab on <see cref="PlayerSpawner"/> then loads the world scene globally.
+    // Host-only progression into the match. Assigns the player prefab on PlayerSpawner then loads the world scene globally
     public static void LoadWorld(NetworkManager networkManager, NetworkObject playerPrefab)
     {
         if (networkManager == null || !networkManager.IsServerStarted)

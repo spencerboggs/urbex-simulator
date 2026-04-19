@@ -7,7 +7,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
 {
     private bool IsStagingOrMenuScene()
     {
-        // Use the object's scene — active scene can still be the previous scene for a frame after FishNet loads World.
+        // Use the object's scene (active scene can still be the previous scene for a frame after FishNet loads World)
         string n = gameObject.scene.name;
         return n == NetworkSceneFlow.Lobby || n == NetworkSceneFlow.MainMenu;
     }

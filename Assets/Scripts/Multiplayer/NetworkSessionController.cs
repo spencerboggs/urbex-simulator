@@ -75,7 +75,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.TransportManager.Transport.SetMaximumClients(_maxPlayers);
     }
 
-    // Sets where the client socket will connect (call before <see cref="StartClient"/> if not using the overload that takes an address)
+    // Sets where the client socket will connect
     public void SetRemoteServerAddress(string address)
     {
         if (_networkManager == null || string.IsNullOrWhiteSpace(address))
