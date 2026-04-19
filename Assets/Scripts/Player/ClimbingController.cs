@@ -53,7 +53,7 @@ public class ClimbingController : MonoBehaviour
     {
         if (isClimbing)
         {
-            PerformClimb();
+            PerformMantle();
             return;
         }
 
@@ -289,7 +289,7 @@ public class ClimbingController : MonoBehaviour
         Debug.Log($"MANTLE STARTED - Type: {(totalClimbHeight < 0.8f ? "Quick vault" : "Full climb")}");
     }
 
-    void PerformClimb()
+    void PerformMantle()
     {
         float totalClimbHeight = climbTarget.y - climbStartPosition.y;
 
