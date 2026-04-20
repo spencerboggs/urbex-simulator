@@ -1,4 +1,6 @@
 using System.Collections;
+using System;
+using System.Reflection;
 using FishNet.Component.Spawning;
 using FishNet.Connection;
 using FishNet.Managing;
@@ -114,10 +116,25 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         ApplyMaxPlayersToTransport();
 
-        if (string.IsNullOrWhiteSpace(remoteAddress))
-            remoteAddress = DefaultJoinAddress ?? "localhost";
+        string input = string.IsNullOrWhiteSpace(remoteAddress) ? (DefaultJoinAddress ?? "localhost") : remoteAddress;
+        if (!TryParseAddressAndPort(input, out string host, out ushort? port))
+            host = input.Trim();
 
-        _networkManager.ClientManager.StartConnection(remoteAddress.Trim());
+        if (string.IsNullOrWhiteSpace(host))
+            host = "localhost";
+
+        host = host.Trim();
+        _networkManager.TransportManager.Transport.SetClientAddress(host);
+        DefaultJoinAddress = port.HasValue ? $"{host}:{port.Value}" : host;
+
+        if (port.HasValue)
+            TrySetTransportPort(_networkManager.TransportManager.Transport, port.Value);
+
+        if (_networkManager.ClientManager.Started)
+            _networkManager.ClientManager.StopConnection();
+
+        Debug.Log($"[Net] Client connecting to {DefaultJoinAddress}...");
+        _networkManager.ClientManager.StartConnection();
     }
 
     // Starts only the server (headless / tooling). Does not load scenes automatically
@@ -160,8 +177,13 @@ public sealed class NetworkSessionController : MonoBehaviour
 
     private void OnClientConnectionState(ClientConnectionStateArgs args)
     {
+        Debug.Log($"[Net] Client connection state: {args.ConnectionState}");
         if (args.ConnectionState != LocalConnectionState.Started)
+        {
+            if (args.ConnectionState == LocalConnectionState.Stopped)
+                Debug.LogWarning("[Net] Client connection stopped/failed. If you're using a WAN IP, make sure the host forwarded port 7770 (UDP/TCP) and allowed it through firewall.");
             return;
+        }
 
         if (!_pendingLobbyAfterHost)
             return;
@@ -175,6 +197,92 @@ public sealed class NetworkSessionController : MonoBehaviour
         yield return null;
         if (_networkManager != null && _networkManager.IsServerStarted)
             NetworkSceneFlow.LoadLobby(_networkManager);
+    }
+
+    private static bool TryParseAddressAndPort(string input, out string host, out ushort? port)
+    {
+        host = null;
+        port = null;
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
+
+        string s = input.Trim();
+
+        // Allow users to paste things like "http://1.2.3.4:7770/" or "1.2.3.4:7770".
+        int scheme = s.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0)
+            s = s[(scheme + 3)..];
+        int slash = s.IndexOf('/');
+        if (slash >= 0)
+            s = s[..slash];
+
+        // IPv6 may be entered as "[::1]:7770"
+        if (s.StartsWith("[", StringComparison.Ordinal))
+        {
+            int end = s.IndexOf(']');
+            if (end <= 0)
+                return false;
+            host = s.Substring(1, end - 1);
+            if (end + 1 < s.Length && s[end + 1] == ':' && ushort.TryParse(s[(end + 2)..], out ushort p6))
+                port = p6;
+            return true;
+        }
+
+        int lastColon = s.LastIndexOf(':');
+        if (lastColon > 0 && lastColon < s.Length - 1)
+        {
+            string left = s[..lastColon];
+            string right = s[(lastColon + 1)..];
+            if (ushort.TryParse(right, out ushort p))
+            {
+                host = left;
+                port = p;
+                return true;
+            }
+        }
+
+        host = s;
+        return true;
+    }
+
+    private static void TrySetTransportPort(Transport transport, ushort port)
+    {
+        if (transport == null)
+            return;
+
+        try
+        {
+            Type t = transport.GetType();
+
+            // Common method names across transports.
+            foreach (string methodName in new[] { "SetPort", "SetClientPort", "SetServerPort" })
+            {
+                MethodInfo m = t.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (m == null)
+                    continue;
+                ParameterInfo[] ps = m.GetParameters();
+                if (ps.Length == 1 && (ps[0].ParameterType == typeof(ushort) || ps[0].ParameterType == typeof(int)))
+                {
+                    object arg = ps[0].ParameterType == typeof(int) ? (object)(int)port : port;
+                    m.Invoke(transport, new[] { arg });
+                    Debug.Log($"[Net] Transport port set via {t.Name}.{methodName}({port}).");
+                    return;
+                }
+            }
+
+            // Tugboat stores it as a serialized field "_port".
+            FieldInfo f = t.GetField("_port", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (f != null && (f.FieldType == typeof(ushort) || f.FieldType == typeof(int)))
+            {
+                object arg = f.FieldType == typeof(int) ? (object)(int)port : port;
+                f.SetValue(transport, arg);
+                Debug.Log($"[Net] Transport port set via {t.Name}._port = {port}.");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[Net] Could not set transport port to {port}. {e.GetType().Name}: {e.Message}");
+        }
     }
 
     private void OnFishNetSceneLoadEnd(SceneLoadEndEventArgs args)
