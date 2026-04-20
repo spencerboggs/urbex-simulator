@@ -65,10 +65,11 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.SceneManager.OnLoadEnd -= OnFishNetSceneLoadEnd;
     }
 
-    // Selected map / level index from the lobby UI; gameplay systems can read this when loading the match
+    // Selected map / level index from the lobby UI
+    // Gameplay systems can read this when loading the match
     public int SelectedMapIndex { get; set; }
 
-    // Default WAN/LAN address shown in the join field (e.g. localhost for testing)
+    // Default WAN/LAN address shown in the join field
     public string DefaultJoinAddress { get; set; } = "localhost";
 
     // Apply transport limits so the lobby capacity matches FishNet server settings
@@ -109,7 +110,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             StartCoroutine(LoadLobbyWhenHostReady());
         }
 
-        // Helpful for Steam P2P: host needs an ID to share.
+        // Helpful for Steam P2P (host needs an ID to share)
         TryLogLocalSteamId();
     }
 
@@ -125,7 +126,8 @@ public sealed class NetworkSessionController : MonoBehaviour
         string host = input?.Trim();
         ushort? port = null;
 
-        // For IP-based transports we allow "host:port"; for FishySteamworks the "address" is a steamId64 string.
+        // For IP-based transports we allow "host:port" 
+        // For FishySteamworks the "address" is a steamId64 string.
         if (!IsSteamTransportActive())
         {
             if (!TryParseAddressAndPort(input, out host, out port))
@@ -232,7 +234,7 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         TrySetBoolField(active, "_peerToPeer", true);
 
-        // For Steam transports the "join address" should be the host's steamId64.
+        // For Steam transports the "join address" should be the host's steamId64
         if (DefaultJoinAddress == "localhost")
             DefaultJoinAddress = string.Empty;
     }
@@ -249,7 +251,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (t == null)
             return;
 
-        // FishySteamworks has a public non-serialized field LocalUserSteamID.
+        // FishySteamworks has a public non-serialized field LocalUserSteamID
         FieldInfo f = t.GetType().GetField("LocalUserSteamID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         if (f == null)
             return;
@@ -258,7 +260,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (v is ulong id && id != 0)
         {
             Debug.Log($"[Steam] Local steamId64: {id} (share this with friends to join).");
-            // Convenience: set the join field to something meaningful when hosting.
+            // Convenience: set the join field to something meaningful when hosting
             DefaultJoinAddress = id.ToString();
         }
     }
@@ -272,7 +274,7 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         string s = input.Trim();
 
-        // Allow users to paste things like "http://1.2.3.4:7770/" or "1.2.3.4:7770".
+        // Allow users to paste things like "http://1.2.3.4:7770/" or "1.2.3.4:7770"
         int scheme = s.IndexOf("://", StringComparison.Ordinal);
         if (scheme >= 0)
             s = s[(scheme + 3)..];
@@ -318,7 +320,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         {
             Type t = transport.GetType();
 
-            // Common method names across transports.
+            // Common method names across transports
             foreach (string methodName in new[] { "SetPort", "SetClientPort", "SetServerPort" })
             {
                 MethodInfo m = t.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -334,7 +336,7 @@ public sealed class NetworkSessionController : MonoBehaviour
                 }
             }
 
-            // Tugboat stores it as a serialized field "_port".
+            // Tugboat stores it as a serialized field "_port"
             FieldInfo f = t.GetField("_port", BindingFlags.Instance | BindingFlags.NonPublic);
             if (f != null && (f.FieldType == typeof(ushort) || f.FieldType == typeof(int)))
             {
@@ -368,15 +370,15 @@ public sealed class NetworkSessionController : MonoBehaviour
                 loadedWorld = true;
         }
 
-        // FishNet global scene loading doesn't necessarily unload any locally-loaded "offline" scene UI.
-        // Ensure MainMenu UI is removed once we transition into Lobby/World on both host and clients.
+        // FishNet global scene loading doesn't necessarily unload any locally-loaded "offline" scene UI
+        // Ensure MainMenu UI is removed once we transition into Lobby/World on both host and clients
         if (loadedLobby || loadedWorld)
             DestroyMainMenuUiIfPresent();
 
         if (!loadedWorld)
             return;
 
-        // Spawning is server-authoritative.
+        // Spawning is server-authoritative
         if (!_networkManager.IsServerStarted || _gameplayPlayerPrefab == null)
             return;
 
@@ -391,7 +393,8 @@ public sealed class NetworkSessionController : MonoBehaviour
                 if (nob == null || !nob.IsSpawned)
                     continue;
 
-                // Only treat an owned "player" as satisfied; connections may own other objects (especially host).
+                // Only treat an owned "player" as satisfied
+                // Connections may own other objects (especially host)
                 if (nob.TryGetComponent(out PlayerLocalControls _))
                 {
                     hasSpawnedOwned = true;
@@ -413,7 +416,7 @@ public sealed class NetworkSessionController : MonoBehaviour
 
     private static void DestroyMainMenuUiIfPresent()
     {
-        // Generated UI uses these names; authored UI might differ, so we also remove known controller scripts.
+        // Generated UI uses these names; authored UI might differ, so we also remove known controller scripts
         GameObject canvas = GameObject.Find("MainMenuCanvas");
         if (canvas != null)
             Destroy(canvas);
@@ -455,8 +458,8 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (_networkManager == null || _networkManager.TransportManager == null)
             return;
 
-        // FishySteamworks is added as a Transport component on the same GameObject as NetworkManager.
-        // We use reflection to stay resilient if the transport isn't installed in some dev environments.
+        // FishySteamworks is added as a Transport component on the same GameObject as NetworkManager
+        // We use reflection to stay resilient if the transport isn't installed in some dev environments
         Transport[] transports = GetComponents<Transport>();
         if (transports == null || transports.Length == 0)
             return;
@@ -486,7 +489,7 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         Type tmType = transportManager.GetType();
 
-        // Try property first.
+        // Try property first
         PropertyInfo transportProp = tmType.GetProperty("Transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         if (transportProp != null && transportProp.CanWrite && transportProp.PropertyType.IsAssignableFrom(transport.GetType()))
         {
@@ -495,7 +498,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             return;
         }
 
-        // Then try a field.
+        // Then try a field
         FieldInfo transportField = tmType.GetField("Transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                                    ?? tmType.GetField("_transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                                    ?? tmType.GetField("transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);

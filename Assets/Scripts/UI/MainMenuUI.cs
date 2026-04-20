@@ -41,7 +41,8 @@ public sealed class MainMenuUI : MonoBehaviour
 
     private void Awake()
     {
-        // MainMenu scene may have no Camera (copied from level); Game view shows "No cameras rendering" and UI can fail to show.
+        // MainMenu scene may have no Camera (copied from level) 
+        // Game view shows "No cameras rendering" and UI can fail to show
         MultiplayerUiRuntimeBuilder.EnsureSceneCamera();
         MultiplayerUiRuntimeBuilder.EnsureEventSystem();
 
@@ -84,11 +85,13 @@ public sealed class MainMenuUI : MonoBehaviour
             return;
         _wired = true;
 
+        // Wire up button click listeners to their respective handler methods
         if (_playButton != null)
             _playButton.onClick.AddListener(ShowPlay);
         if (_quitButton != null)
             _quitButton.onClick.AddListener(QuitApplication);
 
+        // Play menu buttons for hosting, joining, and returning to the main menu
         if (_playMenuBackButton != null)
             _playMenuBackButton.onClick.AddListener(ShowMain);
 
@@ -101,6 +104,7 @@ public sealed class MainMenuUI : MonoBehaviour
 
     public void ShowMain()
     {
+        // Show the main menu panel and hide the play submenu panel
         if (_mainPanel != null)
             _mainPanel.SetActive(true);
         if (_playPanel != null)
@@ -109,6 +113,7 @@ public sealed class MainMenuUI : MonoBehaviour
 
     public void ShowPlay()
     {
+        // Show the play submenu panel and hide the main menu panel
         if (_mainPanel != null)
             _mainPanel.SetActive(false);
         if (_playPanel != null)
@@ -117,6 +122,7 @@ public sealed class MainMenuUI : MonoBehaviour
 
     public void OnHostClicked()
     {
+        // Start hosting a session, which will transition to the lobby scene for all clients once ready
         if (_session == null)
             return;
         _session.StartHost();
@@ -127,6 +133,7 @@ public sealed class MainMenuUI : MonoBehaviour
         if (_session == null)
             return;
 
+        // Attempt to start the client and connect to the specified address
         string address = _joinAddressInput != null ? _joinAddressInput.text : null;
         _session.StartClient(address);
     }

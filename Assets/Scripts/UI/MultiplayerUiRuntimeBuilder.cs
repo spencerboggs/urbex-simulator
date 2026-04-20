@@ -3,7 +3,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
-// Builds a minimal default Canvas + controls when scenes have no authored UI. Disable by wiring your own UI in the inspector
+// Builds a minimal default Canvas + controls when scenes have no authored UI
 public static class MultiplayerUiRuntimeBuilder
 {
     private const float ColumnWidth = 460f;
@@ -33,8 +33,8 @@ public static class MultiplayerUiRuntimeBuilder
 
     private static Font DefaultUiFont()
     {
-        // Built-in Resources font paths vary by Unity version and often return null on Unity 6+.
-        // OS dynamic fonts are the most reliable for runtime-generated uGUI Text.
+        // Built-in Resources font paths vary by Unity version and often return null on Unity 6+
+        // OS dynamic fonts are the most reliable for runtime-generated uGUI Text
         string[] osNames = { "Arial", "Segoe UI", "Helvetica", "Liberation Sans", "Noto Sans", "DejaVu Sans" };
         foreach (string name in osNames)
         {
@@ -100,7 +100,7 @@ public static class MultiplayerUiRuntimeBuilder
     }
 
     // Menu/lobby scenes copied from the level often have no Camera
-    // The Game view then shows "No cameras rendering" and UI may not appear correctly.
+    // The Game view then shows "No cameras rendering" and UI may not appear correctly
     public static void EnsureSceneCamera()
     {
         if (Object.FindAnyObjectByType<Camera>() != null)

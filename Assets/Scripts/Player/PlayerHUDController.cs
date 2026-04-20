@@ -19,6 +19,7 @@ public class PlayerHUDController : MonoBehaviour
         if (hud != null && !hud.gameObject.scene.IsValid())
             hud = null;
 
+        // If no valid HUD reference is assigned, attempt to instantiate one from the prefab
         if (hud == null)
         {
             if (_hudPrefab == null)
@@ -32,6 +33,7 @@ public class PlayerHUDController : MonoBehaviour
         if (movement == null || hud == null)
             return;
 
+        // Update the HUD's stamina bar based on the player's current sprint charge
         hud.SetStamina(movement.GetSprintCharge() / movement.GetMaxSprintCharge());
     }
 }

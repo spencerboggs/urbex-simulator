@@ -253,12 +253,13 @@ public class PlayerMovement : MonoBehaviour
         return isCrouching;
     }
 
-    
+    // Get method to retrieve the player's current sprint charge
     public float GetSprintCharge()
     {
         return sprintCharge;
     }
 
+    // Get method to retrieve the player's maximum sprint charge
     public float GetMaxSprintCharge()
     {
         return maxSprintCharge;

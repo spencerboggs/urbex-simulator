@@ -34,12 +34,15 @@ public sealed class LobbyUI : MonoBehaviour
 
     private void Awake()
     {
+        // Ensure essential UI components exist in the scene for both authored and generated UI
         MultiplayerUiRuntimeBuilder.EnsureSceneCamera();
         MultiplayerUiRuntimeBuilder.EnsureEventSystem();
 
+        // If the player count label is not assigned, we assume the entire UI needs to be generated
         if (_generateDefaultUiIfEmpty && _playerCountLabel == null)
             MultiplayerUiRuntimeBuilder.BuildLobby(this);
 
+        // If a session reference isn't assigned, attempt to find one in the scene
         if (_session == null)
             _session = FindAnyObjectByType<NetworkSessionController>();
 
@@ -69,10 +72,12 @@ public sealed class LobbyUI : MonoBehaviour
 
     private void WireListenersOnce()
     {
+        // Prevent double-wiring if ApplyRuntimeReferences is called multiple times
         if (_wired)
             return;
         _wired = true;
 
+        // Wire up button listeners for map cycling, starting the match, and leaving the lobby
         if (_startMatchButton != null)
             _startMatchButton.onClick.AddListener(OnStartMatchClicked);
 
@@ -88,6 +93,7 @@ public sealed class LobbyUI : MonoBehaviour
         if (_mapLabel == null || _session == null)
             return;
 
+        // Clamp the selected map index to valid bounds and update the label text accordingly
         int idx = Mathf.Clamp(_session.SelectedMapIndex, 0, DefaultMapLabels.Length - 1);
         _session.SelectedMapIndex = idx;
         _mapLabel.text = $"Map: {DefaultMapLabels[idx]}";
@@ -98,6 +104,7 @@ public sealed class LobbyUI : MonoBehaviour
         if (_session == null)
             return;
 
+        // Cycle through available maps by incrementing the selected index and wrapping around using modulo
         _session.SelectedMapIndex = (_session.SelectedMapIndex + 1) % DefaultMapLabels.Length;
         RefreshMapLabel();
     }
@@ -107,6 +114,8 @@ public sealed class LobbyUI : MonoBehaviour
         if (_playerCountLabel == null)
             return;
 
+        // If the NetworkManager isn't active, display a placeholder
+        // Otherwise, show the current number of connected clients out of a maximum of 8
         NetworkManager nm = FindAnyObjectByType<NetworkManager>();
         if (nm == null || !nm.IsServerStarted)
         {
@@ -123,18 +132,21 @@ public sealed class LobbyUI : MonoBehaviour
         if (_startMatchButton == null)
             return;
 
+        // Only enable the Start Match button for the host, since progression is host-driven in this implementation
         NetworkManager nm = FindAnyObjectByType<NetworkManager>();
         bool host = nm != null && nm.IsHostStarted;
         _startMatchButton.interactable = host;
     }
 
     private void OnStartMatchClicked()
-    {
+    {   
+        // In this simple implementation, the host can start the match once ready, which triggers a global scene load for all clients
         _session?.StartMatchFromLobby();
     }
 
     private void OnLeaveClicked()
     {
+        // Disconnect from the session and return to the main menu scene
         _session?.DisconnectAndReturnToMainMenu();
     }
 }
