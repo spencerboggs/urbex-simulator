@@ -2824,6 +2824,7 @@ GameObject:
   - component: {fileID: 1095353618}
   - component: {fileID: 1095353617}
   - component: {fileID: 1095353625}
+  - component: {fileID: 1095353626}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -2899,7 +2900,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 34e4a322dca349547989b14021da4e23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Managing.Transporting.TransportManager
-  Transport: {fileID: 1095353617}
+  Transport: {fileID: 1095353626}
   _maximumClientPacketSize: 20480
   _intermediateLayer: {fileID: 0}
   _latencySimulator:
@@ -2999,6 +3000,23 @@ MonoBehaviour:
   _playerPrefab: {fileID: 2723982658518787085, guid: 1bec7c8469140fe4bbcd750ed4200699, type: 3}
   _addToDefaultScene: 1
   Spawns: []
+--- !u!114 &1095353626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1095353616}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28b19962fe839804180bd02ce1a545f0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FishySteamworks.FishySteamworks
+  _serverBindAddress: 
+  _port: 7770
+  _maximumClients: 9001
+  _peerToPeer: 1
+  _clientAddress: 
 --- !u!1 &1104239109
 GameObject:
   m_ObjectHideFlags: 0
