@@ -181,7 +181,7 @@ public static class MultiplayerUiRuntimeBuilder
         inputText.font = DefaultUiFont();
         inputText.fontSize = InputFontSize;
         inputText.color = Color.white;
-        inputText.text = "localhost";
+        inputText.text = "steamId64 (Steam) or ip:port (LAN)";
         inputText.horizontalOverflow = HorizontalWrapMode.Overflow;
         inputText.verticalOverflow = VerticalWrapMode.Truncate;
         var itr = inputText.GetComponent<RectTransform>();
@@ -278,11 +278,11 @@ public static class MultiplayerUiRuntimeBuilder
         layout.childAlignment = TextAnchor.MiddleCenter;
         layout.spacing = 18f;
         layout.padding = new RectOffset(56, 56, 56, 56);
-        // With childControlHeight true, Text with a bad/missing font reports 0 preferred height (controls collapse to invisible).
+        // With childControlHeight true, Text with a bad/missing font reports 0 preferred height (controls collapse to invisible)
         layout.childControlHeight = true;
         layout.childControlWidth = true;
         layout.childForceExpandHeight = false;
-        // Let buttons/inputs use their preferred width so they stay a centered column, not edge-to-edge.
+        // Let buttons/inputs use their preferred width so they stay a centered column, not edge-to-edge
         layout.childForceExpandWidth = false;
         return go;
     }

@@ -38,6 +38,8 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (_networkManager == null)
             _networkManager = FindAnyObjectByType<NetworkManager>();
 
+        PreferSteamTransportIfPresent();
+        ConfigureSteamTransportIfPresent();
         ApplyMaxPlayersToTransport();
 
         if (_networkManager != null && _gameplayPlayerPrefab != null &&
@@ -106,6 +108,9 @@ public sealed class NetworkSessionController : MonoBehaviour
         {
             StartCoroutine(LoadLobbyWhenHostReady());
         }
+
+        // Helpful for Steam P2P: host needs an ID to share.
+        TryLogLocalSteamId();
     }
 
     // Connects a client to the given address (host's WAN IP, LAN IP, or localhost)
@@ -117,8 +122,15 @@ public sealed class NetworkSessionController : MonoBehaviour
         ApplyMaxPlayersToTransport();
 
         string input = string.IsNullOrWhiteSpace(remoteAddress) ? (DefaultJoinAddress ?? "localhost") : remoteAddress;
-        if (!TryParseAddressAndPort(input, out string host, out ushort? port))
-            host = input.Trim();
+        string host = input?.Trim();
+        ushort? port = null;
+
+        // For IP-based transports we allow "host:port"; for FishySteamworks the "address" is a steamId64 string.
+        if (!IsSteamTransportActive())
+        {
+            if (!TryParseAddressAndPort(input, out host, out port))
+                host = input.Trim();
+        }
 
         if (string.IsNullOrWhiteSpace(host))
             host = "localhost";
@@ -181,7 +193,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (args.ConnectionState != LocalConnectionState.Started)
         {
             if (args.ConnectionState == LocalConnectionState.Stopped)
-                Debug.LogWarning("[Net] Client connection stopped/failed. If you're using a WAN IP, make sure the host forwarded port 7770 (UDP/TCP) and allowed it through firewall.");
+            {
+                if (IsSteamTransportActive())
+                    Debug.LogWarning("[Net] Client connection stopped/failed. If you're using Steam P2P, make sure Steam is running, both accounts can see each other / are allowed, and you're connecting to a valid steamId64 (host).");
+                else
+                    Debug.LogWarning("[Net] Client connection stopped/failed. If you're using a WAN IP, make sure the host forwarded port 7770 (UDP/TCP) and allowed it through firewall.");
+            }
             return;
         }
 
@@ -197,6 +214,53 @@ public sealed class NetworkSessionController : MonoBehaviour
         yield return null;
         if (_networkManager != null && _networkManager.IsServerStarted)
             NetworkSceneFlow.LoadLobby(_networkManager);
+    }
+
+    private void ConfigureSteamTransportIfPresent()
+    {
+        if (_networkManager == null || _networkManager.TransportManager == null)
+            return;
+
+        Transport active = _networkManager.TransportManager.Transport;
+        if (active == null)
+            return;
+
+        // If the active transport is FishySteamworks, default it to Peer-to-Peer (Steam Relay)
+        // so users never need port-forwarding.
+        if (!IsSteamTransportActive())
+            return;
+
+        TrySetBoolField(active, "_peerToPeer", true);
+
+        // For Steam transports the "join address" should be the host's steamId64.
+        if (DefaultJoinAddress == "localhost")
+            DefaultJoinAddress = string.Empty;
+    }
+
+    private void TryLogLocalSteamId()
+    {
+        if (!IsSteamTransportActive())
+            return;
+
+        if (_networkManager == null || _networkManager.TransportManager == null)
+            return;
+
+        Transport t = _networkManager.TransportManager.Transport;
+        if (t == null)
+            return;
+
+        // FishySteamworks has a public non-serialized field LocalUserSteamID.
+        FieldInfo f = t.GetType().GetField("LocalUserSteamID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (f == null)
+            return;
+
+        object v = f.GetValue(t);
+        if (v is ulong id && id != 0)
+        {
+            Debug.Log($"[Steam] Local steamId64: {id} (share this with friends to join).");
+            // Convenience: set the join field to something meaningful when hosting.
+            DefaultJoinAddress = id.ToString();
+        }
     }
 
     private static bool TryParseAddressAndPort(string input, out string host, out ushort? port)
@@ -328,6 +392,85 @@ public sealed class NetworkSessionController : MonoBehaviour
             NetworkObject instance = _networkManager.GetPooledInstantiated(prefab, pos, rot, true);
             _networkManager.ServerManager.Spawn(instance, conn);
             _networkManager.SceneManager.AddOwnerToDefaultScene(instance);
+        }
+    }
+
+    private bool IsSteamTransportActive()
+    {
+        if (_networkManager == null || _networkManager.TransportManager == null)
+            return false;
+
+        Transport t = _networkManager.TransportManager.Transport;
+        string fullName = t?.GetType()?.FullName ?? string.Empty;
+        return fullName.IndexOf("FishySteamworks", StringComparison.OrdinalIgnoreCase) >= 0
+               || fullName.IndexOf("Steam", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static void TrySetBoolField(object obj, string fieldName, bool value)
+    {
+        if (obj == null || string.IsNullOrWhiteSpace(fieldName))
+            return;
+
+        FieldInfo f = obj.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        if (f == null || f.FieldType != typeof(bool))
+            return;
+
+        f.SetValue(obj, value);
+    }
+
+    private void PreferSteamTransportIfPresent()
+    {
+        if (_networkManager == null || _networkManager.TransportManager == null)
+            return;
+
+        // FishySteamworks is added as a Transport component on the same GameObject as NetworkManager.
+        // We use reflection to stay resilient if the transport isn't installed in some dev environments.
+        Transport[] transports = GetComponents<Transport>();
+        if (transports == null || transports.Length == 0)
+            return;
+
+        Transport steamCandidate = null;
+        for (int i = 0; i < transports.Length; i++)
+        {
+            Transport t = transports[i];
+            string fullName = t?.GetType()?.FullName ?? string.Empty;
+            if (fullName.IndexOf("FishySteamworks", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                steamCandidate = t;
+                break;
+            }
+        }
+
+        if (steamCandidate == null)
+            return;
+
+        TrySetActiveTransport(_networkManager.TransportManager, steamCandidate);
+    }
+
+    private static void TrySetActiveTransport(object transportManager, Transport transport)
+    {
+        if (transportManager == null || transport == null)
+            return;
+
+        Type tmType = transportManager.GetType();
+
+        // Try property first.
+        PropertyInfo transportProp = tmType.GetProperty("Transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (transportProp != null && transportProp.CanWrite && transportProp.PropertyType.IsAssignableFrom(transport.GetType()))
+        {
+            transportProp.SetValue(transportManager, transport);
+            Debug.Log($"[Net] Active transport set to {transport.GetType().Name} via TransportManager.Transport property.");
+            return;
+        }
+
+        // Then try a field.
+        FieldInfo transportField = tmType.GetField("Transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                                   ?? tmType.GetField("_transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                                   ?? tmType.GetField("transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (transportField != null && transportField.FieldType.IsAssignableFrom(transport.GetType()))
+        {
+            transportField.SetValue(transportManager, transport);
+            Debug.Log($"[Net] Active transport set to {transport.GetType().Name} via TransportManager field ({transportField.Name}).");
         }
     }
 }
