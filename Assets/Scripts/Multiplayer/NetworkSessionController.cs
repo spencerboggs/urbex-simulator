@@ -351,21 +351,33 @@ public sealed class NetworkSessionController : MonoBehaviour
 
     private void OnFishNetSceneLoadEnd(SceneLoadEndEventArgs args)
     {
-        if (_networkManager == null || !_networkManager.IsServerStarted || _gameplayPlayerPrefab == null)
+        if (_networkManager == null)
             return;
 
+        bool loadedLobby = false;
         bool loadedWorld = false;
         for (int i = 0; i < args.LoadedScenes.Length; i++)
         {
             Scene s = args.LoadedScenes[i];
-            if (s.IsValid() && s.name == NetworkSceneFlow.World)
-            {
+            if (!s.IsValid())
+                continue;
+
+            if (s.name == NetworkSceneFlow.Lobby)
+                loadedLobby = true;
+            else if (s.name == NetworkSceneFlow.World)
                 loadedWorld = true;
-                break;
-            }
         }
 
+        // FishNet global scene loading doesn't necessarily unload any locally-loaded "offline" scene UI.
+        // Ensure MainMenu UI is removed once we transition into Lobby/World on both host and clients.
+        if (loadedLobby || loadedWorld)
+            DestroyMainMenuUiIfPresent();
+
         if (!loadedWorld)
+            return;
+
+        // Spawning is server-authoritative.
+        if (!_networkManager.IsServerStarted || _gameplayPlayerPrefab == null)
             return;
 
         foreach (NetworkConnection conn in _networkManager.ServerManager.Clients.Values)
@@ -376,7 +388,11 @@ public sealed class NetworkSessionController : MonoBehaviour
             bool hasSpawnedOwned = false;
             foreach (NetworkObject nob in conn.Objects)
             {
-                if (nob != null && nob.IsSpawned)
+                if (nob == null || !nob.IsSpawned)
+                    continue;
+
+                // Only treat an owned "player" as satisfied; connections may own other objects (especially host).
+                if (nob.TryGetComponent(out PlayerLocalControls _))
                 {
                     hasSpawnedOwned = true;
                     break;
@@ -393,6 +409,22 @@ public sealed class NetworkSessionController : MonoBehaviour
             _networkManager.ServerManager.Spawn(instance, conn);
             _networkManager.SceneManager.AddOwnerToDefaultScene(instance);
         }
+    }
+
+    private static void DestroyMainMenuUiIfPresent()
+    {
+        // Generated UI uses these names; authored UI might differ, so we also remove known controller scripts.
+        GameObject canvas = GameObject.Find("MainMenuCanvas");
+        if (canvas != null)
+            Destroy(canvas);
+
+        GameObject menuCamera = GameObject.Find("MenuCamera");
+        if (menuCamera != null)
+            Destroy(menuCamera);
+
+        MainMenuUI ui = FindAnyObjectByType<MainMenuUI>();
+        if (ui != null)
+            Destroy(ui.gameObject);
     }
 
     private bool IsSteamTransportActive()
