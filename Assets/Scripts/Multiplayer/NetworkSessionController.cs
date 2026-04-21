@@ -69,8 +69,9 @@ public sealed class NetworkSessionController : MonoBehaviour
     // Gameplay systems can read this when loading the match
     public int SelectedMapIndex { get; set; }
 
-    // Default WAN/LAN address shown in the join field
-    public string DefaultJoinAddress { get; set; } = "localhost";
+    // Last join value synced with the main menu join field. With FishySteamworks this is the host's
+    // Steam ID (steamId64). For non-Steam transports (local dev) this may be a hostname, IP, or host:port.
+    public string DefaultJoinTarget { get; set; } = string.Empty;
 
     // Apply transport limits so the lobby capacity matches FishNet server settings
     public void ApplyMaxPlayersToTransport()
@@ -80,13 +81,13 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.TransportManager.Transport.SetMaximumClients(_maxPlayers);
     }
 
-    // Sets where the client socket will connect
-    public void SetRemoteServerAddress(string address)
+    // Sets the transport client target and remembers it for the join UI (same format as DefaultJoinTarget)
+    public void SetJoinTarget(string joinTarget)
     {
-        if (_networkManager == null || string.IsNullOrWhiteSpace(address))
+        if (_networkManager == null || string.IsNullOrWhiteSpace(joinTarget))
             return;
-        _networkManager.TransportManager.Transport.SetClientAddress(address.Trim());
-        DefaultJoinAddress = address.Trim();
+        _networkManager.TransportManager.Transport.SetClientAddress(joinTarget.Trim());
+        DefaultJoinTarget = joinTarget.Trim();
     }
 
     // Starts server and local client (host), then loads the lobby scene when connections are ready
@@ -114,32 +115,43 @@ public sealed class NetworkSessionController : MonoBehaviour
         TryLogLocalSteamId();
     }
 
-    // Connects a client to the given address (host's WAN IP, LAN IP, or localhost)
-    public void StartClient(string remoteAddress)
+    // Starts the FishNet client. Text comes from the join field
+    // Host Steam ID (steamId64) for FishySteamworks,
+    // or hostname / IP / host:port when a non-Steam transport is active
+    public void StartClient(string joinFieldText)
     {
         if (_networkManager == null)
             return;
 
         ApplyMaxPlayersToTransport();
 
-        string input = string.IsNullOrWhiteSpace(remoteAddress) ? (DefaultJoinAddress ?? "localhost") : remoteAddress;
-        string host = input?.Trim();
+        string input = string.IsNullOrWhiteSpace(joinFieldText) ? DefaultJoinTarget : joinFieldText;
+        input = input?.Trim() ?? string.Empty;
+
+        string clientAddress = input;
         ushort? port = null;
 
-        // For IP-based transports we allow "host:port" 
-        // For FishySteamworks the "address" is a steamId64 string.
-        if (!IsSteamTransportActive())
+        bool steam = IsSteamTransportActive();
+        if (!steam)
         {
-            if (!TryParseAddressAndPort(input, out host, out port))
-                host = input.Trim();
+            if (!TryParseEndpointForIpTransport(input, out clientAddress, out port))
+                clientAddress = input;
         }
 
-        if (string.IsNullOrWhiteSpace(host))
-            host = "localhost";
+        if (string.IsNullOrWhiteSpace(clientAddress))
+        {
+            if (steam)
+            {
+                Debug.LogWarning("[Net] Join target is empty. Enter the host's Steam ID (steamId64).");
+                return;
+            }
 
-        host = host.Trim();
-        _networkManager.TransportManager.Transport.SetClientAddress(host);
-        DefaultJoinAddress = port.HasValue ? $"{host}:{port.Value}" : host;
+            clientAddress = "localhost";
+        }
+
+        clientAddress = clientAddress.Trim();
+        _networkManager.TransportManager.Transport.SetClientAddress(clientAddress);
+        DefaultJoinTarget = port.HasValue ? $"{clientAddress}:{port.Value}" : clientAddress;
 
         if (port.HasValue)
             TrySetTransportPort(_networkManager.TransportManager.Transport, port.Value);
@@ -147,7 +159,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (_networkManager.ClientManager.Started)
             _networkManager.ClientManager.StopConnection();
 
-        Debug.Log($"[Net] Client connecting to {DefaultJoinAddress}...");
+        Debug.Log($"[Net] Client connecting (target: {DefaultJoinTarget})...");
         _networkManager.ClientManager.StartConnection();
     }
 
@@ -197,9 +209,9 @@ public sealed class NetworkSessionController : MonoBehaviour
             if (args.ConnectionState == LocalConnectionState.Stopped)
             {
                 if (IsSteamTransportActive())
-                    Debug.LogWarning("[Net] Client connection stopped/failed. If you're using Steam P2P, make sure Steam is running, both accounts can see each other / are allowed, and you're connecting to a valid steamId64 (host).");
+                    Debug.LogWarning("[Net] Client connection stopped/failed. If you're using Steam P2P, make sure Steam is running, both accounts can see each other / are allowed, and you're connecting to the host's steamId64.");
                 else
-                    Debug.LogWarning("[Net] Client connection stopped/failed. If you're using a WAN IP, make sure the host forwarded port 7770 (UDP/TCP) and allowed it through firewall.");
+                    Debug.LogWarning("[Net] Client connection stopped/failed. For IP-based transports, confirm the host endpoint, port (often 7770 UDP/TCP), firewall, and port forwarding if needed.");
             }
             return;
         }
@@ -227,16 +239,15 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (active == null)
             return;
 
-        // If the active transport is FishySteamworks, default it to Peer-to-Peer (Steam Relay)
-        // so users never need port-forwarding.
+        // FishySteamworks: prefer P2P via Steam relay so clients do not rely on manual port forwarding
         if (!IsSteamTransportActive())
             return;
 
         TrySetBoolField(active, "_peerToPeer", true);
 
-        // For Steam transports the "join address" should be the host's steamId64
-        if (DefaultJoinAddress == "localhost")
-            DefaultJoinAddress = string.Empty;
+        // Legacy sessions may still have an IP-style placeholder; Steam joins use steamId64 only
+        if (DefaultJoinTarget.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            DefaultJoinTarget = string.Empty;
     }
 
     private void TryLogLocalSteamId()
@@ -259,13 +270,14 @@ public sealed class NetworkSessionController : MonoBehaviour
         object v = f.GetValue(t);
         if (v is ulong id && id != 0)
         {
-            Debug.Log($"[Steam] Local steamId64: {id} (share this with friends to join).");
-            // Convenience: set the join field to something meaningful when hosting
-            DefaultJoinAddress = id.ToString();
+            Debug.Log($"[Steam] Local steamId64: {id} (friends can paste this into Join to connect).");
+            // Prefill the join field with this host's ID after StartHost
+            DefaultJoinTarget = id.ToString();
         }
     }
 
-    private static bool TryParseAddressAndPort(string input, out string host, out ushort? port)
+    // host:port parsing for Tugboat / IP transports only (FishySteamworks uses a single steamId64 string)
+    private static bool TryParseEndpointForIpTransport(string input, out string host, out ushort? port)
     {
         host = null;
         port = null;

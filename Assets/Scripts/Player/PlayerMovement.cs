@@ -122,10 +122,6 @@ public class PlayerMovement : MonoBehaviour
         {
             // Drain sprint charge when sprinting and moving
             sprintCharge -= sprintDrainRate * Time.deltaTime;
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log(
-                $"[SPRINT] Charge={sprintCharge:F2} | Exhausted={exhausted} | Sprinting={isSprinting}"
-            );
         }
         else
         {

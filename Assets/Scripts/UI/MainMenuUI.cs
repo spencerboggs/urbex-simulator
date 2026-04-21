@@ -52,8 +52,8 @@ public sealed class MainMenuUI : MonoBehaviour
         if (_session == null)
             _session = FindAnyObjectByType<NetworkSessionController>();
 
-        if (_joinAddressInput != null && _session != null && !string.IsNullOrEmpty(_session.DefaultJoinAddress))
-            _joinAddressInput.text = _session.DefaultJoinAddress;
+        if (_joinAddressInput != null && _session != null && !string.IsNullOrEmpty(_session.DefaultJoinTarget))
+            _joinAddressInput.text = _session.DefaultJoinTarget;
 
         WireButtonsOnce();
         ShowMain();
@@ -133,9 +133,9 @@ public sealed class MainMenuUI : MonoBehaviour
         if (_session == null)
             return;
 
-        // Attempt to start the client and connect to the specified address
-        string address = _joinAddressInput != null ? _joinAddressInput.text : null;
-        _session.StartClient(address);
+        // Join field: host Steam ID (steamId64) when using FishySteamworks
+        string joinFieldText = _joinAddressInput != null ? _joinAddressInput.text : null;
+        _session.StartClient(joinFieldText);
     }
 
     private static void QuitApplication()
