@@ -6,14 +6,17 @@ using UnityEngine.UI;
 // Builds a minimal default Canvas + controls when scenes have no authored UI
 public static class MultiplayerUiRuntimeBuilder
 {
-    private const float ColumnWidth = 460f;
-    private const float ButtonHeight = 56f;
-    private const float InputHeight = 52f;
-    private const int ButtonFontSize = 22;
-    private const int InputFontSize = 20;
-    private const int LobbyTitleFontSize = 36;
-    private const int LobbySubtitleFontSize = 22;
-    private const int LobbyBodyFontSize = 20;
+    // Bake UI scaling into authored sizes (not transform scaling)
+    private const float UiScale = 2f;
+
+    private const float ColumnWidth = 460f * UiScale;
+    private const float ButtonHeight = 56f * UiScale;
+    private const float InputHeight = 52f * UiScale;
+    private const int ButtonFontSize = (int)(22 * UiScale);
+    private const int InputFontSize = (int)(20 * UiScale);
+    private const int LobbyTitleFontSize = (int)(36 * UiScale);
+    private const int LobbySubtitleFontSize = (int)(22 * UiScale);
+    private const int LobbyBodyFontSize = (int)(20 * UiScale);
 
     private static Sprite _uiSprite;
 
@@ -158,8 +161,9 @@ public static class MultiplayerUiRuntimeBuilder
         var playBtn = CreateButton(main.transform, "PlayButton", "Play");
         var quitBtn = CreateButton(main.transform, "QuitButton", "Quit");
 
-        var hostBtn = CreateButton(play.transform, "HostButton", "Host");
-        var joinBtn = CreateButton(play.transform, "JoinButton", "Join");
+        // Play menu items are stacked vertically, with horizontal dividers to separate sections.
+        var hostBtn = CreateButton(play.transform, "HostButton", "Host Game");
+        var dividerA = CreateHorizontalDivider(play.transform, "DividerA");
 
         var inputGo = new GameObject("JoinAddress", typeof(RectTransform));
         inputGo.transform.SetParent(play.transform, false);
@@ -171,24 +175,47 @@ public static class MultiplayerUiRuntimeBuilder
         AddLayoutElement(inputGo, InputHeight, ColumnWidth);
         var inputBg = inputGo.AddComponent<Image>();
         StyleImage(inputBg);
-        inputBg.color = new Color(0.15f, 0.15f, 0.15f, 1f);
+        inputBg.color = new Color(0.78f, 0.78f, 0.78f, 1f);
 
         var input = inputGo.AddComponent<InputField>();
+        var joinBtn = CreateButton(play.transform, "JoinButton", "Join Game");
+        var dividerB = CreateHorizontalDivider(play.transform, "DividerB");
         var backBtn = CreateButton(play.transform, "BackButton", "Back");
+
+        var placeholderGo = new GameObject("Placeholder");
+        placeholderGo.transform.SetParent(inputGo.transform, false);
+        var placeholder = placeholderGo.AddComponent<Text>();
+        placeholder.font = DefaultUiFont();
+        placeholder.fontSize = InputFontSize;
+        placeholder.fontStyle = FontStyle.Italic;
+        placeholder.color = new Color(0.35f, 0.35f, 0.35f, 1f);
+        placeholder.text = "Host SteamID";
+        placeholder.alignment = TextAnchor.MiddleCenter;
+        placeholder.horizontalOverflow = HorizontalWrapMode.Overflow;
+        placeholder.verticalOverflow = VerticalWrapMode.Truncate;
+        var phtr = placeholder.GetComponent<RectTransform>();
+        phtr.anchorMin = Vector2.zero;
+        phtr.anchorMax = Vector2.one;
+        phtr.offsetMin = new Vector2(8f * UiScale, 4f * UiScale);
+        phtr.offsetMax = new Vector2(-8f * UiScale, -4f * UiScale);
+
         var inputTextGo = new GameObject("Text");
         inputTextGo.transform.SetParent(inputGo.transform, false);
         var inputText = inputTextGo.AddComponent<Text>();
         inputText.font = DefaultUiFont();
         inputText.fontSize = InputFontSize;
-        inputText.color = Color.white;
-        inputText.text = "steamId64 (Steam) or ip:port (LAN)";
+        inputText.color = Color.black;
+        inputText.text = string.Empty;
+        inputText.alignment = TextAnchor.MiddleCenter;
         inputText.horizontalOverflow = HorizontalWrapMode.Overflow;
         inputText.verticalOverflow = VerticalWrapMode.Truncate;
         var itr = inputText.GetComponent<RectTransform>();
         itr.anchorMin = Vector2.zero;
         itr.anchorMax = Vector2.one;
-        itr.offsetMin = new Vector2(8f, 4f);
-        itr.offsetMax = new Vector2(-8f, -4f);
+        itr.offsetMin = new Vector2(8f * UiScale, 4f * UiScale);
+        itr.offsetMax = new Vector2(-8f * UiScale, -4f * UiScale);
+
+        input.placeholder = placeholder;
         input.textComponent = inputText;
         input.targetGraphic = inputBg;
         input.lineType = InputField.LineType.SingleLine;
@@ -229,8 +256,8 @@ public static class MultiplayerUiRuntimeBuilder
         title.text = "Lobby";
         title.alignment = TextAnchor.MiddleCenter;
         var titleRect = titleGo.GetComponent<RectTransform>();
-        titleRect.sizeDelta = new Vector2(ColumnWidth, 56f);
-        AddLayoutElement(titleGo, 58f, ColumnWidth);
+        titleRect.sizeDelta = new Vector2(ColumnWidth, 56f * UiScale);
+        AddLayoutElement(titleGo, 58f * UiScale, ColumnWidth);
 
         var countGo = new GameObject("PlayerCount");
         countGo.transform.SetParent(root.transform, false);
@@ -241,8 +268,8 @@ public static class MultiplayerUiRuntimeBuilder
         countText.text = "Players: --";
         countText.alignment = TextAnchor.MiddleCenter;
         var countRect = countGo.GetComponent<RectTransform>();
-        countRect.sizeDelta = new Vector2(ColumnWidth, 40f);
-        AddLayoutElement(countGo, 42f, ColumnWidth);
+        countRect.sizeDelta = new Vector2(ColumnWidth, 40f * UiScale);
+        AddLayoutElement(countGo, 42f * UiScale, ColumnWidth);
 
         var mapGo = new GameObject("MapLabel");
         mapGo.transform.SetParent(root.transform, false);
@@ -252,12 +279,12 @@ public static class MultiplayerUiRuntimeBuilder
         mapLabel.color = new Color(0.75f, 0.78f, 0.88f, 1f);
         mapLabel.text = "Map: Level (default)";
         mapLabel.alignment = TextAnchor.MiddleCenter;
-        mapGo.GetComponent<RectTransform>().sizeDelta = new Vector2(ColumnWidth, 34f);
-        AddLayoutElement(mapGo, 38f, ColumnWidth);
+        mapGo.GetComponent<RectTransform>().sizeDelta = new Vector2(ColumnWidth, 34f * UiScale);
+        AddLayoutElement(mapGo, 38f * UiScale, ColumnWidth);
 
-        var mapNext = CreateButton(root.transform, "MapNext", "Next map");
-        var startBtn = CreateButton(root.transform, "StartMatch", "Start match (host)");
-        var leaveBtn = CreateButton(root.transform, "Leave", "Leave lobby");
+        var mapNext = CreateButton(root.transform, "MapNext", "Next Map");
+        var startBtn = CreateButton(root.transform, "StartMatch", "Start Match (Host)");
+        var leaveBtn = CreateButton(root.transform, "Leave", "Leave Lobby");
 
         lobby.ApplyRuntimeReferences(countText, mapLabel, mapNext, startBtn, leaveBtn);
     }
@@ -273,11 +300,11 @@ public static class MultiplayerUiRuntimeBuilder
         rect.offsetMax = Vector2.zero;
         var img = go.AddComponent<Image>();
         StyleImage(img);
-        img.color = new Color(0.07f, 0.08f, 0.12f, 0.94f);
+        img.color = Color.black;
         var layout = go.AddComponent<VerticalLayoutGroup>();
         layout.childAlignment = TextAnchor.MiddleCenter;
-        layout.spacing = 18f;
-        layout.padding = new RectOffset(56, 56, 56, 56);
+        layout.spacing = 18f * UiScale;
+        layout.padding = new RectOffset((int)(56 * UiScale), (int)(56 * UiScale), (int)(56 * UiScale), (int)(56 * UiScale));
         // With childControlHeight true, Text with a bad/missing font reports 0 preferred height (controls collapse to invisible)
         layout.childControlHeight = true;
         layout.childControlWidth = true;
@@ -297,13 +324,13 @@ public static class MultiplayerUiRuntimeBuilder
 
         var img = go.AddComponent<Image>();
         StyleImage(img);
-        img.color = new Color(0.22f, 0.42f, 0.72f, 1f);
+        img.color = new Color(0.92f, 0.92f, 0.90f, 1f);
         var btn = go.AddComponent<Button>();
         var colors = btn.colors;
-        colors.normalColor = new Color(0.22f, 0.42f, 0.72f, 1f);
-        colors.highlightedColor = new Color(0.32f, 0.52f, 0.88f, 1f);
-        colors.pressedColor = new Color(0.16f, 0.30f, 0.55f, 1f);
-        colors.disabledColor = new Color(0.25f, 0.25f, 0.28f, 0.65f);
+        colors.normalColor = new Color(0.92f, 0.92f, 0.90f, 1f);
+        colors.highlightedColor = new Color(0.98f, 0.98f, 0.96f, 1f);
+        colors.pressedColor = new Color(0.82f, 0.82f, 0.80f, 1f);
+        colors.disabledColor = new Color(0.70f, 0.70f, 0.70f, 1f);
         colors.colorMultiplier = 1f;
         colors.fadeDuration = 0.08f;
         btn.colors = colors;
@@ -315,7 +342,7 @@ public static class MultiplayerUiRuntimeBuilder
         text.font = DefaultUiFont();
         text.fontSize = ButtonFontSize;
         text.fontStyle = FontStyle.Bold;
-        text.color = new Color(0.98f, 0.99f, 1f, 1f);
+        text.color = Color.black;
         text.text = label;
         text.alignment = TextAnchor.MiddleCenter;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
@@ -324,8 +351,25 @@ public static class MultiplayerUiRuntimeBuilder
         var tr = text.GetComponent<RectTransform>();
         tr.anchorMin = Vector2.zero;
         tr.anchorMax = Vector2.one;
-        tr.offsetMin = new Vector2(16f, 0f);
-        tr.offsetMax = new Vector2(-16f, 0f);
+        tr.offsetMin = new Vector2(16f * UiScale, 0f);
+        tr.offsetMax = new Vector2(-16f * UiScale, 0f);
         return btn;
+    }
+
+    private static GameObject CreateHorizontalDivider(Transform parent, string name)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+
+        var rect = go.AddComponent<RectTransform>();
+        float w = ColumnWidth * 0.92f;
+        float h = 6f * UiScale;
+        rect.sizeDelta = new Vector2(w, h);
+        AddLayoutElement(go, 10f * UiScale, w);
+
+        var img = go.AddComponent<Image>();
+        StyleImage(img);
+        img.color = new Color(0.35f, 0.35f, 0.35f, 1f);
+        return go;
     }
 }

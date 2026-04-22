@@ -387,6 +387,11 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (loadedLobby || loadedWorld)
             DestroyMainMenuUiIfPresent();
 
+        // Ensure Lobby UI is removed once we enter gameplay
+        // If scenes are loaded globally/additively, the lobby canvas can otherwise persist
+        if (loadedWorld)
+            DestroyLobbyUiIfPresent();
+
         if (!loadedWorld)
             return;
 
@@ -438,6 +443,17 @@ public sealed class NetworkSessionController : MonoBehaviour
             Destroy(menuCamera);
 
         MainMenuUI ui = FindAnyObjectByType<MainMenuUI>();
+        if (ui != null)
+            Destroy(ui.gameObject);
+    }
+
+    private static void DestroyLobbyUiIfPresent()
+    {
+        GameObject canvas = GameObject.Find("LobbyCanvas");
+        if (canvas != null)
+            Destroy(canvas);
+
+        LobbyUI ui = FindAnyObjectByType<LobbyUI>();
         if (ui != null)
             Destroy(ui.gameObject);
     }

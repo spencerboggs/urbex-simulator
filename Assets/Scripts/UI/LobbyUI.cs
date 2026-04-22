@@ -1,5 +1,6 @@
 using FishNet.Managing;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 
@@ -31,6 +32,7 @@ public sealed class LobbyUI : MonoBehaviour
     private bool _generateDefaultUiIfEmpty = true;
 
     private bool _wired;
+    private float _ignoreStartMatchClicksUntil;
 
     private void Awake()
     {
@@ -52,6 +54,11 @@ public sealed class LobbyUI : MonoBehaviour
     private void OnEnable()
     {
         RefreshMapLabel();
+        // On scene load, InputSystemUIInputModule can dispatch an initial Submit
+        // If a button is selected, that Submit can invoke onClick. Debounce and clear selection
+        _ignoreStartMatchClicksUntil = Time.unscaledTime + 0.25f;
+        if (EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(null);
     }
 
     private void Update()
@@ -141,6 +148,8 @@ public sealed class LobbyUI : MonoBehaviour
     private void OnStartMatchClicked()
     {   
         // In this simple implementation, the host can start the match once ready, which triggers a global scene load for all clients
+        if (Time.unscaledTime < _ignoreStartMatchClicksUntil)
+            return;
         _session?.StartMatchFromLobby();
     }
 
