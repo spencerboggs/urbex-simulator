@@ -15,18 +15,19 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
     [Header("Regen (server)")]
     [SerializeField]
     [Tooltip("Seconds after last damage before regeneration begins.")]
-    private float _healthRegenDelaySeconds = 3f;
+    private float _healthRegenDelaySeconds = 5f;
 
     [SerializeField]
     [Tooltip("Health restored per second while regen is active (default 10).")]
-    private float _healthRegenPerSecond = 10f;
+    private float _healthRegenPerSecond = 5f;
 
     [Header("Fall damage (owner reports impact; server validates)")]
     [SerializeField]
     private float _minDownwardSpeedForDamage = 15f;
 
     [SerializeField]
-    private float _fallDamagePerSpeedOverThreshold = 2f;
+    [Tooltip("Damage per unit/s of downward speed above the minimum (linear in impact speed over the threshold).")]
+    private float _fallDamagePerSpeedOverThreshold = 5f;
 
     [SerializeField]
     [Tooltip("Clamp on reported downward speed from owner (stability / light anti-cheat).")]
@@ -47,6 +48,9 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
     private float _lastAirborneVerticalVelocity;
 
     private float _lastDamageTime = -999f;
+
+    // Integer SyncVar + fractional regen per frame would stall at max-1
+    private float _regenCarry;
 
     public float HealthPercent => _maxHealth <= 0 ? 0f : Mathf.Clamp01((float)_health.Value / _maxHealth);
     public int CurrentHealth => _health.Value;
@@ -110,12 +114,21 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
     private void ServerTickRegen()
     {
         if (_health.Value >= _maxHealth)
+        {
+            _regenCarry = 0f;
             return;
+        }
+
         if (Time.time - _lastDamageTime < _healthRegenDelaySeconds)
             return;
 
-        float next = Mathf.Min(_maxHealth, _health.Value + _healthRegenPerSecond * Time.deltaTime);
-        _health.Value = Mathf.RoundToInt(next);
+        _regenCarry += _healthRegenPerSecond * Time.deltaTime;
+        int add = Mathf.FloorToInt(_regenCarry);
+        if (add <= 0)
+            return;
+
+        _regenCarry -= add;
+        _health.Value = Mathf.Min(_maxHealth, _health.Value + add);
     }
 
     // Server-only: subtract health (falls, hazards, future hostile AI). Clients no-op
@@ -139,6 +152,7 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
         int next = Mathf.Max(0, _health.Value - amount);
         _health.Value = next;
         _lastDamageTime = Time.time;
+        _regenCarry = 0f;
 
         if (next <= 0)
             HandleDeathServer();

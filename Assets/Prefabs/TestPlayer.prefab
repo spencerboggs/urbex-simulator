@@ -222,7 +222,7 @@ MonoBehaviour:
   _healthRegenDelaySeconds: 3
   _healthRegenPerSecond: 10
   _minDownwardSpeedForDamage: 15
-  _fallDamagePerSpeedOverThreshold: 2
+  _fallDamagePerSpeedOverThreshold: 5
   _maxAcceptedFallSpeed: 80
 --- !u!114 &3847592018374659999
 MonoBehaviour:
