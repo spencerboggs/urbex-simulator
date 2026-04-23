@@ -51,6 +51,18 @@ public class PlayerMovement : MonoBehaviour
     // Multiplier for crouch height (scale factor)
     public float crouchHeightMultiplier = 0.5f;
 
+    [Tooltip("Layers counted as blocking when checking headroom to stand up.")]
+    [SerializeField]
+    private LayerMask _crouchObstructionMask = ~0;
+
+    [Tooltip("Tiny extra gap so standing checks do not graze ceilings due to float error.")]
+    [SerializeField]
+    private float _standClearanceSkin = 0.02f;
+
+    [Tooltip("Colliders with world-space top below (feet + this) are ignored so the ground does not block standing checks.")]
+    [SerializeField]
+    private float _standCheckIgnoreBelowFeet = 0.15f;
+
     // Original height of the character controller capsule
     private float originalHeight;
     // Current height of the character controller capsule when crouching
@@ -149,38 +161,27 @@ public class PlayerMovement : MonoBehaviour
                 sprintCharge = Mathf.Max(0f, sprintCharge - maxSprintCharge * jumpStaminaCostPercent);
             }
             
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("Jump triggered");
         }
 
         // If the player hits their head on something while jumping, reset vertical velocity
         if (controller.collisionFlags.HasFlag(CollisionFlags.Above) && velocity.y > 0)
-        {
             velocity.y = 0f;
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("Head collision detected, resetting vertical velocity");
-        }
 
         /* Crouch handling */
         // Check if the player is trying to crouch (holding Left Ctrl)
         bool crouchInput = Keyboard.current.leftCtrlKey.isPressed;
 
-        // Toggle crouch state when crouch input is pressed/released
         if (isGrounded && crouchInput)
-        {
             isCrouching = true;
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("Crouch initiated");
-        }
+        else if (!crouchInput && isCrouching && HasStandingClearance())
+            isCrouching = false;
 
-        if (!crouchInput && isCrouching)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("Attempting to stand up from crouch");
-            Debug.Log($"Can stand up: {CanStandUp()}");
-            if (CanStandUp())
-                isCrouching = false;
-        }
+        // Mid-stand lerp lost headroom (moving ceiling or bad sample): snap intent back to crouched until clear
+        if (!crouchInput && !isCrouching &&
+            controller.height > crouchHeight + 0.02f &&
+            controller.height < originalHeight - 0.02f &&
+            !HasStandingClearance())
+            isCrouching = true;
 
         // Apply crouch/stand changes to the character controller height and center
         float targetHeight = isCrouching ? crouchHeight : originalHeight;
@@ -234,13 +235,62 @@ public class PlayerMovement : MonoBehaviour
         // hud.SetStamina(sprintCharge / maxSprintCharge);
     }
 
-    // Helper method to check if the player has room to stand up
-    private bool CanStandUp()
+    // True if a full-height capsule at the current feet position would not overlap geometry (excluding this controller)
+    private bool HasStandingClearance()
     {
-        // Just check if there's enough space above the player's head to stand up
-        float headClearance = originalHeight - crouchHeight;
-        Vector3 rayOrigin = transform.position + Vector3.up * crouchHeight;
-        return !Physics.SphereCast(rayOrigin, controller.radius, Vector3.up, out _, headClearance);
+        GetCapsuleBottomWorld(out Vector3 feetWorld);
+        GetStandingCapsuleWorld(out Vector3 bottomSphereCenter, out Vector3 topSphereCenter, out float checkRadius);
+
+        const QueryTriggerInteraction triggers = QueryTriggerInteraction.Ignore;
+        Collider[] overlaps = Physics.OverlapCapsule(
+            bottomSphereCenter,
+            topSphereCenter,
+            checkRadius,
+            _crouchObstructionMask,
+            triggers);
+
+        if (overlaps == null || overlaps.Length == 0)
+            return true;
+
+        float ignoreBelowY = feetWorld.y + _standCheckIgnoreBelowFeet;
+
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider c = overlaps[i];
+            if (c == null || c == controller)
+                continue;
+            if (c.transform.IsChildOf(transform) || transform.IsChildOf(c.transform))
+                continue;
+            // Floor / ground the capsule rests on; do not treat as overhead obstruction
+            if (c.bounds.max.y < ignoreBelowY)
+                continue;
+            return false;
+        }
+
+        return true;
+    }
+
+    // Inner line for Physics.CheckCapsule / OverlapCapsule: hemisphere centers for a vertical capsule of given height and radius, feet fixed at current capsule bottom
+    private void GetStandingCapsuleWorld(out Vector3 bottomSphereCenter, out Vector3 topSphereCenter, out float radius)
+    {
+        radius = controller.radius - _standClearanceSkin;
+        if (radius <= 0.01f)
+            radius = controller.radius * 0.98f;
+
+        float standHeight = Mathf.Max(originalHeight - _standClearanceSkin * 2f, radius * 2f + 0.01f);
+        Vector3 up = transform.up;
+
+        GetCapsuleBottomWorld(out Vector3 capsuleBottomWorld);
+
+        bottomSphereCenter = capsuleBottomWorld + up * radius;
+        topSphereCenter = capsuleBottomWorld + up * (standHeight - radius);
+    }
+
+    private void GetCapsuleBottomWorld(out Vector3 capsuleBottomWorld)
+    {
+        Vector3 worldCenter = transform.TransformPoint(controller.center);
+        float halfExtents = Mathf.Max(0f, controller.height * 0.5f - controller.radius);
+        capsuleBottomWorld = worldCenter - transform.up * halfExtents;
     }
 
     // Get method for other scripts to check if the player is currently crouching
