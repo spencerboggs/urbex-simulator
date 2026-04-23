@@ -155,11 +155,11 @@ MonoBehaviour:
   jumpHeight: 1.8
   gravity: -20
   maxSprintCharge: 10
-  sprintDrainRate: 1.5
-  sprintRegenRate: 1
+  sprintDrainRate: 0.1
+  sprintRegenRate: 3
   minSprintRequired: 3
   noStaminaJumpMultiplier: 0.75
-  jumpStaminaCostPercent: 0.1
+  jumpStaminaCostPercent: 0.01
   groundedStickForce: -2
   airControlMultiplier: 0.6
   fallMultiplier: 1.05
@@ -270,6 +270,9 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 2723982658518787085}
   _networkObjectCache: {fileID: 2723982658518787085}
+  _remoteInterpolationDelaySeconds: 0.1
+  _remoteVelocityExtrapolationBlend: 0.35
+  _remoteMaxExtrapolationSeconds: 0.08
 --- !u!1 &4487654722471429204
 GameObject:
   m_ObjectHideFlags: 0
@@ -399,7 +402,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 60
+  field of view: 80
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
