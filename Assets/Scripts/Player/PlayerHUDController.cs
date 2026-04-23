@@ -11,10 +11,12 @@ public class PlayerHUDController : MonoBehaviour
     private GameObject _hudPrefab;
 
     private PlayerMovement movement;
+    private PlayerHealth health;
 
     private void Start()
     {
         movement = GetComponent<PlayerMovement>();
+        health = GetComponent<PlayerHealth>();
 
         if (hud != null && !hud.gameObject.scene.IsValid())
             hud = null;
@@ -30,10 +32,13 @@ public class PlayerHUDController : MonoBehaviour
 
     private void Update()
     {
-        if (movement == null || hud == null)
+        if (hud == null)
             return;
 
-        // Update the HUD's stamina bar based on the player's current sprint charge
-        hud.SetStamina(movement.GetSprintCharge() / movement.GetMaxSprintCharge());
+        if (health != null)
+            hud.SetHealth(health.HealthPercent);
+
+        if (movement != null)
+            hud.SetStamina(movement.GetSprintCharge() / movement.GetMaxSprintCharge());
     }
 }

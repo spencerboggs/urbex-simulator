@@ -294,22 +294,13 @@ public class PlayerMovement : MonoBehaviour
     }
 
     // Get method for other scripts to check if the player is currently crouching
-    public bool getIsCrouching()
-    {
-        return isCrouching;
-    }
+    public bool getIsCrouching() => isCrouching;
 
     // Get method to retrieve the player's current sprint charge
-    public float GetSprintCharge()
-    {
-        return sprintCharge;
-    }
+    public float GetSprintCharge() => sprintCharge;
 
     // Get method to retrieve the player's maximum sprint charge
-    public float GetMaxSprintCharge()
-    {
-        return maxSprintCharge;
-    }
+    public float GetMaxSprintCharge() => maxSprintCharge;
 
     // Get method to retrieve the player's current forward velocity
     public float GetForwardVelocity()
@@ -318,9 +309,9 @@ public class PlayerMovement : MonoBehaviour
         return Vector3.Dot(horizontalVel, transform.forward);
     }
 
+    // Get method to retrieve the player's current vertical velocity
+    public float GetVerticalVelocity() => velocity.y;
+
     // Set method to reset vertical velocity (used by climbing controller when finishing a climb)
-    public void ResetVerticalVelocity()
-    {
-        velocity.y = 0f;
-    }
+    public void ResetVerticalVelocity() => velocity.y = 0f;
 }

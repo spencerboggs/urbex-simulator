@@ -16,8 +16,9 @@ GameObject:
   - component: {fileID: 1701095863598958817}
   - component: {fileID: 111782049185572510}
   - component: {fileID: 1626239779872317595}
+  - component: {fileID: 4321056900894402751}
+  - component: {fileID: 3847592018374659999}
   - component: {fileID: 2723982658518787085}
-  - component: {fileID: 9136017586642520056}
   m_Layer: 0
   m_Name: TestPlayer
   m_TagString: Untagged
@@ -164,6 +165,11 @@ MonoBehaviour:
   airControlMultiplier: 0.6
   fallMultiplier: 1.05
   crouchHeightMultiplier: 0.5
+  _crouchObstructionMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  _standClearanceSkin: 0.02
+  _standCheckIgnoreBelowFeet: 0.15
 --- !u!114 &111782049185572510
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -197,6 +203,45 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHUDController
   hud: {fileID: 0}
   _hudPrefab: {fileID: 951765100778405326, guid: 51944dfb9db669b40804c36ea06d5cb7, type: 3}
+--- !u!114 &4321056900894402751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4269007787301066919}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 825e30eebb92d6d4eb64a7bd562b0c5e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 2723982658518787085}
+  _networkObjectCache: {fileID: 0}
+  _maxHealth: 100
+  _healthRegenDelaySeconds: 3
+  _healthRegenPerSecond: 10
+  _minDownwardSpeedForDamage: 15
+  _fallDamagePerSpeedOverThreshold: 2
+  _maxAcceptedFallSpeed: 80
+--- !u!114 &3847592018374659999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4269007787301066919}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8f4e2a91d6b4c5e8a3f7b2d9e1c0a4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 2723982658518787085}
+  _networkObjectCache: {fileID: 0}
+  _remoteInterpolationDelaySeconds: 0.1
+  _remoteVelocityExtrapolationBlend: 0.35
+  _remoteMaxExtrapolationSeconds: 0.08
 --- !u!114 &2723982658518787085
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -243,7 +288,8 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours:
-  - {fileID: 9136017586642520056}
+  - {fileID: 0}
+  - {fileID: 0}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -255,24 +301,6 @@ MonoBehaviour:
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   _initializedTimestamp: -8584249749612475534
---- !u!114 &9136017586642520056
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4269007787301066919}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c8f4e2a91d6b4c5e8a3f7b2d9e1c0a4f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerLocalControls
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 2723982658518787085}
-  _networkObjectCache: {fileID: 2723982658518787085}
-  _remoteInterpolationDelaySeconds: 0.1
-  _remoteVelocityExtrapolationBlend: 0.35
-  _remoteMaxExtrapolationSeconds: 0.08
 --- !u!1 &4487654722471429204
 GameObject:
   m_ObjectHideFlags: 0

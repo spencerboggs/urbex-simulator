@@ -3,11 +3,12 @@ using UnityEngine.UIElements;
 
 public class PlayerHUD : MonoBehaviour
 {
+    private VisualElement healthFill;
     private VisualElement staminaFill;
 
-    private void TryBindStaminaFill()
+    private void TryBindFills()
     {
-        if (staminaFill != null)
+        if (healthFill != null && staminaFill != null)
             return;
 
         var doc = GetComponent<UIDocument>();
@@ -18,12 +19,31 @@ public class PlayerHUD : MonoBehaviour
         if (root == null)
             return;
 
-        staminaFill = root.Q<VisualElement>("staminaFill");
+        if (healthFill == null)
+            healthFill = root.Q<VisualElement>("healthFill");
+        if (staminaFill == null)
+            staminaFill = root.Q<VisualElement>("staminaFill");
+    }
+
+    public void SetHealth(float percent)
+    {
+        TryBindFills();
+        if (healthFill == null)
+            return;
+
+        percent = Mathf.Clamp01(percent);
+        healthFill.style.width = Length.Percent(percent * 100f);
+        if (percent > 0.5f)
+            healthFill.style.backgroundColor = new Color(0.3f, 0.75f, 0.35f);
+        else if (percent > 0.28f)
+            healthFill.style.backgroundColor = Color.yellow;
+        else
+            healthFill.style.backgroundColor = Color.red;
     }
 
     public void SetStamina(float percent)
     {
-        TryBindStaminaFill();
+        TryBindFills();
         if (staminaFill == null)
             return;
 

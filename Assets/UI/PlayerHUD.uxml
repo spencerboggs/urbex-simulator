@@ -1,7 +1,13 @@
 <ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/PlayerHUD.uss?fileID=7433441132597879392&amp;guid=be272f64e986c714eada5182bceca713&amp;type=3#PlayerHUD"/>
-    
-    <ui:VisualElement name="staminaBar">
-        <ui:VisualElement name="staminaFill" />
+    <ui:VisualElement name="hudBars">
+        <ui:Label name="healthLabel" text="Health" class="barTitle" />
+        <ui:VisualElement name="healthBar">
+            <ui:VisualElement name="healthFill" />
+        </ui:VisualElement>
+        <ui:Label name="staminaLabel" text="Stamina" class="barTitle" />
+        <ui:VisualElement name="staminaBar">
+            <ui:VisualElement name="staminaFill" />
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
