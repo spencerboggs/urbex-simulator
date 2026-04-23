@@ -125,7 +125,7 @@ public class PlayerMovement : MonoBehaviour
         // Player can sprint if they want to sprint and are not exhausted
         bool canStartSprint = !exhausted;
         // Final sprinting state
-        bool isSprinting = wantsToSprint && canStartSprint;
+        bool isSprinting = wantsToSprint && canStartSprint && !isCrouching;
         // Apply sprint multiplier to movement speed if sprinting
         float currentSpeed = moveSpeed * (isSprinting ? sprintMultiplier : 1f);
 
