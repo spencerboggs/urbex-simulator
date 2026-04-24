@@ -1,5 +1,8 @@
 <ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/PlayerHUD.uss?fileID=7433441132597879392&amp;guid=be272f64e986c714eada5182bceca713&amp;type=3#PlayerHUD"/>
+    <ui:VisualElement name="cameraHintRow" class="cameraHintRow">
+        <ui:Label name="cameraHintLabel" text="Press C — camera" class="cameraHintText" />
+    </ui:VisualElement>
     <ui:VisualElement name="hudBars">
         <ui:Label name="healthLabel" text="Health" class="barTitle" />
         <ui:VisualElement name="healthBar">

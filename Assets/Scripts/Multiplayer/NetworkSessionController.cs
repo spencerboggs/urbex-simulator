@@ -392,6 +392,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (loadedWorld)
             DestroyLobbyUiIfPresent();
 
+        if (loadedLobby)
+            PhotoRollSession.ResetForLobby();
+
+        if (loadedWorld && _networkManager.IsServerStarted)
+            PhotoRollSession.EnsureServerMatchId();
+
         if (!loadedWorld)
             return;
 

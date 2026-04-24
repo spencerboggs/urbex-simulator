@@ -3,7 +3,8 @@ using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
 using UnityEngine;
 
-// Server-authoritative health, regen, fall damage reporting, and a placeholder respawn
+// Server-authoritative health and regen
+// Fall damage reporting and placeholder respawn
 [DisallowMultipleComponent]
 public sealed class PlayerHealth : NetworkBehaviour, IDamageable
 {
@@ -21,16 +22,16 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
     [Tooltip("Health restored per second while regen is active (default 10).")]
     private float _healthRegenPerSecond = 5f;
 
-    [Header("Fall damage (owner reports impact; server validates)")]
+    [Header("Fall damage (owner reports impact, server validates)")]
     [SerializeField]
     private float _minDownwardSpeedForDamage = 15f;
 
     [SerializeField]
-    [Tooltip("Damage per unit/s of downward speed above the minimum (linear in impact speed over the threshold).")]
+    [Tooltip("Damage per unit per second of downward speed above the minimum threshold as a linear ramp")]
     private float _fallDamagePerSpeedOverThreshold = 5f;
 
     [SerializeField]
-    [Tooltip("Clamp on reported downward speed from owner (stability / light anti-cheat).")]
+    [Tooltip("Clamp on reported downward speed from owner for stability and light anti-cheat")]
     private float _maxAcceptedFallSpeed = 80f;
 
     private readonly SyncVar<int> _health = new(
@@ -49,7 +50,7 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
 
     private float _lastDamageTime = -999f;
 
-    // Integer SyncVar + fractional regen per frame would stall at max-1
+    // Integer SyncVar with fractional regen each frame can stall one below max health
     private float _regenCarry;
 
     public float HealthPercent => _maxHealth <= 0 ? 0f : Mathf.Clamp01((float)_health.Value / _maxHealth);
@@ -131,7 +132,8 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
         _health.Value = Mathf.Min(_maxHealth, _health.Value + add);
     }
 
-    // Server-only: subtract health (falls, hazards, future hostile AI). Clients no-op
+    // Server-only subtract for falls hazards and future AI
+    // Clients no-op here
     public void RemoveHealth(int amount)
     {
         if (amount <= 0)
@@ -160,7 +162,8 @@ public sealed class PlayerHealth : NetworkBehaviour, IDamageable
 
     private void HandleDeathServer()
     {
-        // Temporary: snap everyone to the initial spawn pose until a proper death / revive / spectate flow exists
+        // Temporary snap to initial spawn pose
+        // Replace later with death revive or spectate flow
         _health.Value = _maxHealth;
         ObserversApplyRespawnTeleport(_spawnPosition, _spawnRotation);
     }

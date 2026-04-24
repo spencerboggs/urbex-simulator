@@ -5,6 +5,8 @@ public class PlayerHUD : MonoBehaviour
 {
     private VisualElement healthFill;
     private VisualElement staminaFill;
+    private VisualElement cameraHintRow;
+    private Label cameraHintLabel;
 
     private void TryBindFills()
     {
@@ -23,6 +25,19 @@ public class PlayerHUD : MonoBehaviour
             healthFill = root.Q<VisualElement>("healthFill");
         if (staminaFill == null)
             staminaFill = root.Q<VisualElement>("staminaFill");
+        if (cameraHintRow == null)
+            cameraHintRow = root.Q<VisualElement>("cameraHintRow");
+        if (cameraHintLabel == null)
+            cameraHintLabel = root.Q<Label>("cameraHintLabel");
+    }
+
+    public void SetCameraEquipHint(bool visible, string line)
+    {
+        TryBindFills();
+        if (cameraHintLabel != null && !string.IsNullOrEmpty(line))
+            cameraHintLabel.text = line;
+        if (cameraHintRow != null)
+            cameraHintRow.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
     }
 
     public void SetHealth(float percent)

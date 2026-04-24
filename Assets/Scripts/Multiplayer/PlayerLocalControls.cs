@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
@@ -5,8 +6,10 @@ using FishNet.Transporting;
 using UnityEngine;
 using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 
-// Enables player input and view only for the owning client. Replicates root transform to
-// other clients (movement is local-only on the owner so there is no NetworkTransform on the prefab)
+// Enables player input and view only for the owning client
+// Replicates root transform to other clients
+// Movement is local-only on the owner
+// There is no NetworkTransform on the prefab
 [DefaultExecutionOrder(-50)]
 public sealed class PlayerLocalControls : NetworkBehaviour
 {
@@ -31,7 +34,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
 
     private readonly List<RemoteTransformSample> _remoteSamples = new(16);
 
-    // Last staging flag applied to owner movement/camera toggles (null = not yet synced this session)
+    // Last staging flag for owner movement and camera toggles
+    // Null means not yet synced this session
     private bool? _lastOwnerStagingForComponents;
 
     private readonly SyncVar<Vector3> _replicatedPos = new(
@@ -42,6 +46,11 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         Quaternion.identity,
         new SyncTypeSettings(WritePermission.ServerOnly, ReadPermission.Observers, 1f / 20f, Channel.Unreliable));
 
+    // Server-assigned match folder id for local photo roll paths
+    private readonly SyncVar<string> _matchPhotoRollId = new(
+        string.Empty,
+        new SyncTypeSettings(WritePermission.ServerOnly, ReadPermission.Observers, 0f, Channel.Reliable));
+
     private static bool IsLobbyOrMainMenuName(string sceneName)
     {
         return sceneName == NetworkSceneFlow.Lobby || sceneName == NetworkSceneFlow.MainMenu;
@@ -49,7 +58,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
 
     private bool IsStagingOrMenuScene()
     {
-        // Once the active scene is the match, never treat as lobby/menu
+        // When the active scene is the match
+        // Never treat as lobby or menu
         string active = UnitySceneManager.GetActiveScene().name;
         if (active == NetworkSceneFlow.World)
             return false;
@@ -61,9 +71,13 @@ public sealed class PlayerLocalControls : NetworkBehaviour
     public override void OnStartServer()
     {
         base.OnStartServer();
-        // Match spawn pose so observers are correct before the first owner LateUpdate/Rpc
+        // Match spawn pose so observers are correct
+        // Before the first owner LateUpdate or Rpc
         _replicatedPos.Value = transform.position;
         _replicatedRot.Value = transform.rotation;
+
+        string rollId = PhotoRollSession.PeekServerMatchId();
+        _matchPhotoRollId.Value = string.IsNullOrEmpty(rollId) ? string.Empty : rollId;
     }
 
     public override void OnStartClient()
@@ -72,6 +86,10 @@ public sealed class PlayerLocalControls : NetworkBehaviour
 
         _replicatedPos.OnChange += OnReplicatedPosChanged;
         _replicatedRot.OnChange += OnReplicatedRotChanged;
+        _matchPhotoRollId.OnChange += OnMatchPhotoRollIdChanged;
+
+        if (!string.IsNullOrEmpty(_matchPhotoRollId.Value))
+            PhotoRollSession.ApplyReplicatedMatchId(_matchPhotoRollId.Value);
 
         if (IsOwner)
         {
@@ -85,7 +103,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             foreach (AudioListener listener in GetComponentsInChildren<AudioListener>(true))
                 listener.enabled = false;
 
-            // Remote proxies: transform is driven by sync; CharacterController would fight Teleport/set
+            // Remote proxies use replicated transform
+            // CharacterController would fight Teleport or set
             if (TryGetComponent(out CharacterController characterController))
                 characterController.enabled = false;
 
@@ -98,7 +117,15 @@ public sealed class PlayerLocalControls : NetworkBehaviour
     {
         _replicatedPos.OnChange -= OnReplicatedPosChanged;
         _replicatedRot.OnChange -= OnReplicatedRotChanged;
+        _matchPhotoRollId.OnChange -= OnMatchPhotoRollIdChanged;
         base.OnStopClient();
+    }
+
+    private void OnMatchPhotoRollIdChanged(string previous, string next, bool asServer)
+    {
+        if (asServer)
+            return;
+        PhotoRollSession.ApplyReplicatedMatchId(next);
     }
 
     private void Update()
@@ -124,6 +151,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
                 climbing.enabled = gameplay;
             if (TryGetComponent(out PlayerHUDController hud))
                 hud.enabled = gameplay;
+            if (TryGetComponent(out PlayerCameraMode cameraMode))
+                cameraMode.enabled = gameplay;
             _lastOwnerStagingForComponents = staging;
         }
 
@@ -153,8 +182,9 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         if (IsStagingOrMenuScene())
             return;
 
-        // Listen host alone: no remote observers 
-        // Skip RPC + SyncVar churn (avoids fighting CharacterController)
+        // Listen-only host with no remote observers
+        // Skip RPC and SyncVar churn
+        // Avoids fighting CharacterController
         if (NetworkManager != null && NetworkManager.IsHostStarted &&
             NetworkManager.ServerManager != null &&
             NetworkManager.ServerManager.Clients.Count <= 1)
@@ -185,7 +215,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         if (IsOwner)
             return;
 
-        // Keep server instance aligned with last authoritative sample (hits/triggers)
+        // Keep server instance aligned with last authoritative sample
+        // Covers hits and triggers
         if (asServer && IsServerStarted)
             transform.SetPositionAndRotation(_replicatedPos.Value, _replicatedRot.Value);
 
@@ -244,7 +275,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             return;
         }
 
-        // If every sample is still in the future relative to the playhead, hold the oldest
+        // If every sample is still in the future relative to the playhead
+        // Hold the oldest
         if (renderTime <= _remoteSamples[0].Time)
         {
             RemoteTransformSample s = _remoteSamples[0];
