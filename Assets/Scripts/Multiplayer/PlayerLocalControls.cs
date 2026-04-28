@@ -84,6 +84,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
     {
         base.OnStartClient();
 
+        EnsureHardBodyPresent();
+
         _replicatedPos.OnChange += OnReplicatedPosChanged;
         _replicatedRot.OnChange += OnReplicatedRotChanged;
         _matchPhotoRollId.OnChange += OnMatchPhotoRollIdChanged;
@@ -119,6 +121,14 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         _replicatedRot.OnChange -= OnReplicatedRotChanged;
         _matchPhotoRollId.OnChange -= OnMatchPhotoRollIdChanged;
         base.OnStopClient();
+    }
+
+    private void EnsureHardBodyPresent()
+    {
+        if (!TryGetComponent(out CharacterController _))
+            return;
+        if (!TryGetComponent(out PlayerHardBody _))
+            gameObject.AddComponent<PlayerHardBody>();
     }
 
     private void OnMatchPhotoRollIdChanged(string previous, string next, bool asServer)

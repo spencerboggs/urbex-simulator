@@ -1,5 +1,6 @@
 using System.Collections;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using FishNet.Component.Spawning;
 using FishNet.Connection;
@@ -30,6 +31,35 @@ public sealed class NetworkSessionController : MonoBehaviour
     private bool _enterLobbyAfterHost = true;
 
     private bool _pendingLobbyAfterHost;
+
+    [Header("Player Spawn Variation")]
+    [Tooltip("Distance (meters) between player spawn slots in the 3x3 grid.")]
+    [SerializeField]
+    [Min(0.1f)]
+    private float _spawnGridSpacing = 1.35f;
+
+    [Tooltip("Extra per-player jitter within each grid slot so spawns aren't perfectly aligned.")]
+    [SerializeField]
+    [Min(0f)]
+    private float _spawnJitterRadius = 0.15f;
+
+    [Tooltip("If true, try a few nearby slots when the preferred slot is blocked.")]
+    [SerializeField]
+    private bool _spawnTryFindUnblockedSlot = true;
+
+    // 3x3 offsets in a "spiral-ish" order: center first, then around it
+    private static readonly Vector2Int[] SpawnGridOffsets =
+    {
+        new(0, 0),
+        new(1, 0),
+        new(-1, 0),
+        new(0, 1),
+        new(0, -1),
+        new(1, 1),
+        new(-1, 1),
+        new(1, -1),
+        new(-1, -1),
+    };
 
     private void Awake()
     {
@@ -405,7 +435,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (!_networkManager.IsServerStarted || _gameplayPlayerPrefab == null)
             return;
 
-        foreach (NetworkConnection conn in _networkManager.ServerManager.Clients.Values)
+        // Deterministic iteration so spawn slot assignment is stable
+        List<NetworkConnection> conns = new(_networkManager.ServerManager.Clients.Values);
+        conns.Sort((a, b) => a.ClientId.CompareTo(b.ClientId));
+
+        int nextSpawnSlot = 0;
+        foreach (NetworkConnection conn in conns)
         {
             if (!conn.IsActive || !conn.IsAuthenticated)
                 continue;
@@ -429,12 +464,92 @@ public sealed class NetworkSessionController : MonoBehaviour
                 continue;
 
             NetworkObject prefab = _gameplayPlayerPrefab;
-            Vector3 pos = prefab.transform.position;
+            Vector3 basePos = prefab.transform.position;
             Quaternion rot = prefab.transform.rotation;
+            Vector3 pos = GetVariedSpawnPosition(basePos, rot, conn.ClientId, nextSpawnSlot++, prefab);
             NetworkObject instance = _networkManager.GetPooledInstantiated(prefab, pos, rot, true);
             _networkManager.ServerManager.Spawn(instance, conn);
             _networkManager.SceneManager.AddOwnerToDefaultScene(instance);
         }
+    }
+
+    private Vector3 GetVariedSpawnPosition(Vector3 basePos, Quaternion baseRot, int clientId, int preferredSlot, NetworkObject prefab)
+    {
+        Vector3 right = baseRot * Vector3.right;
+        Vector3 forward = baseRot * Vector3.forward;
+
+        int slotCount = SpawnGridOffsets.Length;
+        int startSlot = Mod(preferredSlot, slotCount);
+
+        for (int attempt = 0; attempt < slotCount; attempt++)
+        {
+            if (attempt > 0 && !_spawnTryFindUnblockedSlot)
+                break;
+
+            int slot = Mod(startSlot + attempt, slotCount);
+            Vector2Int o = SpawnGridOffsets[slot];
+
+            Vector3 offset = (right * (o.x * _spawnGridSpacing)) + (forward * (o.y * _spawnGridSpacing));
+            Vector3 jitter = GetDeterministicJitter(clientId, slot) * _spawnJitterRadius;
+
+            Vector3 candidate = basePos + offset + jitter;
+            if (!_spawnTryFindUnblockedSlot || IsSpawnCandidateClear(candidate, prefab))
+                return candidate;
+        }
+
+        return basePos + (right * _spawnGridSpacing) + GetDeterministicJitter(clientId, startSlot) * _spawnJitterRadius;
+    }
+
+    private static Vector3 GetDeterministicJitter(int clientId, int salt)
+    {
+        unchecked
+        {
+            uint x = (uint)(clientId * 73856093) ^ (uint)(salt * 19349663) ^ 0x9E3779B9u;
+            x ^= x >> 16;
+            x *= 2246822519u;
+            x ^= x >> 13;
+            x *= 3266489917u;
+            x ^= x >> 16;
+
+            float fx = ((x & 0xFFFFu) / 65535f) * 2f - 1f;
+            float fz = (((x >> 16) & 0xFFFFu) / 65535f) * 2f - 1f;
+
+            Vector3 v = new(fx, 0f, fz);
+            float mag = v.magnitude;
+            if (mag > 1e-5f)
+                v /= mag;
+            return v;
+        }
+    }
+
+    private bool IsSpawnCandidateClear(Vector3 position, NetworkObject prefab)
+    {
+        float radius = 0.5f;
+        float height = 2f;
+        Vector3 center = Vector3.zero;
+
+        if (prefab != null && prefab.TryGetComponent(out CharacterController cc))
+        {
+            radius = Mathf.Max(0.05f, cc.radius);
+            height = Mathf.Max(radius * 2f + 0.01f, cc.height);
+            center = cc.center;
+        }
+
+        Vector3 up = Vector3.up;
+        float half = Mathf.Max(0f, height * 0.5f - radius);
+        Vector3 worldCenter = position + center;
+        Vector3 p1 = worldCenter + up * half;
+        Vector3 p2 = worldCenter - up * half;
+
+        const QueryTriggerInteraction triggers = QueryTriggerInteraction.Ignore;
+        bool blocked = Physics.CheckCapsule(p1, p2, radius, ~0, triggers);
+        return !blocked;
+    }
+
+    private static int Mod(int value, int m)
+    {
+        int r = value % m;
+        return r < 0 ? r + m : r;
     }
 
     private static void DestroyMainMenuUiIfPresent()
