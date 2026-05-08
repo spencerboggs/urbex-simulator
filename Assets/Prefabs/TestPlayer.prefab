@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 111782049185572510}
   - component: {fileID: 1626239779872317595}
   - component: {fileID: 6011122233445566777}
+  - component: {fileID: 7011122233445566888}
   - component: {fileID: 4321056900894402751}
   - component: {fileID: 3847592018374659999}
   - component: {fileID: 2723982658518787085}
@@ -154,6 +155,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   moveSpeed: 2.5
   sprintMultiplier: 2.5
+  _hasBackpack: 0
+  _sprintMultiplierNoBackpack: 2.7
+  _sprintMultiplierWithBackpack: 2.3
   jumpHeight: 1.8
   gravity: -20
   maxSprintCharge: 10
@@ -220,6 +224,26 @@ MonoBehaviour:
   _photoWidth: 1920
   _photoHeight: 1080
   _captureCooldownSeconds: 0.4
+  _maxFov: 80
+  _minFov: 25
+  _zoomStepFraction: 0.1
+  _zoomLerpSpeed: 12
+--- !u!114 &7011122233445566888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4269007787301066919}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e314dc66a7af1af4bb343cec009f5c1b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerInventoryController
+  _hasBackpack: 0
+  _slotsWithoutBackpack: 3
+  _slotsWithBackpack: 5
+  _selectedSlotIndex: -1
 --- !u!114 &4321056900894402751
 MonoBehaviour:
   m_ObjectHideFlags: 0

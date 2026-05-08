@@ -1,34 +1,52 @@
 <ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/CameraViewfinder.uss?fileID=7433441132597879392&amp;guid=3c7aa2f1b4d8471e9e0c5dba1f2a3b4c&amp;type=3"/>
-    <ui:VisualElement name="viewfinderRoot">
-        <ui:VisualElement name="letterbox">
-            <ui:VisualElement name="viewfinderFrame">
-                <ui:VisualElement name="viewfinderInner" />
-                <ui:VisualElement name="tickTL" class="cornerTick" />
-                <ui:VisualElement name="tickTR" class="cornerTick" />
-                <ui:VisualElement name="tickBL" class="cornerTick" />
-                <ui:VisualElement name="tickBR" class="cornerTick" />
-                <ui:VisualElement name="crtScanlines" picking-mode="Ignore" />
-                <ui:VisualElement name="topBar" picking-mode="Ignore">
-                    <ui:VisualElement picking-mode="Ignore" style="flex-direction: row; align-items: center;">
-                        <ui:VisualElement name="recDot" class="recBlink" />
-                        <ui:Label text="REC" name="recLabel" style="font-size: 13px; color: rgb(220, 220, 230); -unity-font-style: bold;" />
+    <ui:VisualElement name="viewfinderFrame">
+        <ui:VisualElement name="viewfinderInner" picking-mode="Ignore" />
+        <ui:VisualElement name="tickTL" class="cornerTick" />
+        <ui:VisualElement name="tickTR" class="cornerTick" />
+        <ui:VisualElement name="tickBL" class="cornerTick" />
+        <ui:VisualElement name="tickBR" class="cornerTick" />
+        <ui:VisualElement name="centerReticle" picking-mode="Ignore">
+            <ui:VisualElement name="reticleH" picking-mode="Ignore" />
+            <ui:VisualElement name="reticleV" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="crtScanlines" picking-mode="Ignore" />
+        <ui:VisualElement name="topBar" picking-mode="Ignore">
+            <ui:VisualElement name="modeGroup" picking-mode="Ignore" class="modeGroup">
+                <ui:Label text="PHOTO" name="modeLabel" class="modeLabel" />
+            </ui:VisualElement>
+            <ui:VisualElement name="batteryGroup" picking-mode="Ignore" class="batteryGroup">
+                <ui:Label name="batteryLabel" text="BATT" class="batteryText" />
+                <ui:VisualElement name="batteryIcon" picking-mode="Ignore" class="batteryIcon">
+                    <ui:VisualElement name="batteryShell" picking-mode="Ignore" class="batteryShell">
+                        <ui:VisualElement name="batteryCell0" picking-mode="Ignore" class="batteryCell batteryCellOn" />
+                        <ui:VisualElement name="batteryCell1" picking-mode="Ignore" class="batteryCell batteryCellOn" />
+                        <ui:VisualElement name="batteryCell2" picking-mode="Ignore" class="batteryCell batteryCellOn" />
+                        <ui:VisualElement name="batteryCell3" picking-mode="Ignore" class="batteryCell" />
                     </ui:VisualElement>
-                    <ui:Label name="batteryLabel" text="BAT  ███░" />
-                </ui:VisualElement>
-                <ui:Label name="stampLabel" text="1986-04-23  --:--:--" picking-mode="Ignore" />
-                <ui:VisualElement name="bottomHints" picking-mode="Ignore">
-                    <ui:Label name="hintCapture" class="hintLabel" text="Left Click" />
-                    <ui:Label name="hintExit" class="hintLabel" text="C  Stow" />
+                    <ui:VisualElement name="batteryTerminal" picking-mode="Ignore" class="batteryTerminal" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
-        <ui:VisualElement name="shutterFlash" picking-mode="Ignore" />
-        <ui:VisualElement name="savedToast" picking-mode="Ignore">
-            <ui:VisualElement name="savedToastInner" picking-mode="Ignore">
-                <ui:Label name="savedToastTitle" text="Photo saved" picking-mode="Ignore" />
-                <ui:Label name="savedToastPath" text="" picking-mode="Ignore" />
+        <ui:Label name="stampLabel" text="1986-04-23  --:--:--" picking-mode="Ignore" />
+        <ui:VisualElement name="zoomGroup" picking-mode="Ignore">
+            <ui:Label text="W" name="zoomLabelW" class="zoomLabel" />
+            <ui:VisualElement name="zoomTrack" picking-mode="Ignore">
+                <ui:VisualElement name="zoomFill" picking-mode="Ignore" />
             </ui:VisualElement>
+            <ui:Label text="T" name="zoomLabelT" class="zoomLabel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="bottomHints" picking-mode="Ignore">
+            <ui:Label name="hintCapture" class="hintLabel" text="Left Click" />
+            <ui:Label name="hintZoom" class="hintLabel" text="Scroll  Zoom" />
+            <ui:Label name="hintExit" class="hintLabel" text="C  Stow" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="shutterFlash" picking-mode="Ignore" />
+    <ui:VisualElement name="savedToast" picking-mode="Ignore">
+        <ui:VisualElement name="savedToastInner" picking-mode="Ignore">
+            <ui:Label name="savedToastTitle" text="Photo saved" picking-mode="Ignore" />
+            <ui:Label name="savedToastPath" text="" picking-mode="Ignore" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

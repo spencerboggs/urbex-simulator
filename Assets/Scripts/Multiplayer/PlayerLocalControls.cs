@@ -129,6 +129,11 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             return;
         if (!TryGetComponent(out PlayerHardBody _))
             gameObject.AddComponent<PlayerHardBody>();
+
+        // Ensure inventory controller exists on spawned player instances
+        // Without this, hotbar selection input won't run (C/1-4)
+        if (!TryGetComponent(out PlayerInventoryController _))
+            gameObject.AddComponent<PlayerInventoryController>();
     }
 
     private void OnMatchPhotoRollIdChanged(string previous, string next, bool asServer)
@@ -163,6 +168,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
                 hud.enabled = gameplay;
             if (TryGetComponent(out PlayerCameraMode cameraMode))
                 cameraMode.enabled = gameplay;
+            if (TryGetComponent(out PlayerInventoryController inventory))
+                inventory.enabled = gameplay;
             _lastOwnerStagingForComponents = staging;
         }
 

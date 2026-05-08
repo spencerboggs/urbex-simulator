@@ -13,4 +13,21 @@
             <ui:VisualElement name="staminaFill" />
         </ui:VisualElement>
     </ui:VisualElement>
+    <ui:VisualElement name="hotbarRoot">
+        <ui:VisualElement name="hotbarSlot0" class="hotbarSlot">
+            <ui:Label name="hotbarSlot0Label" text="C" class="hotbarSlotLabel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="hotbarSlot1" class="hotbarSlot">
+            <ui:Label name="hotbarSlot1Label" text="1" class="hotbarSlotLabel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="hotbarSlot2" class="hotbarSlot">
+            <ui:Label name="hotbarSlot2Label" text="2" class="hotbarSlotLabel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="hotbarSlot3" class="hotbarSlot">
+            <ui:Label name="hotbarSlot3Label" text="3" class="hotbarSlotLabel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="hotbarSlot4" class="hotbarSlot">
+            <ui:Label name="hotbarSlot4Label" text="4" class="hotbarSlotLabel" />
+        </ui:VisualElement>
+    </ui:VisualElement>
 </ui:UXML>

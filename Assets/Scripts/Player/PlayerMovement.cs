@@ -11,6 +11,18 @@ public class PlayerMovement : MonoBehaviour
     public float moveSpeed = 2.5f;
     // Sprint speed multiplier
     public float sprintMultiplier = 2.5f;
+
+    [Header("Backpack (affects sprint)")]
+    [SerializeField]
+    private bool _hasBackpack;
+
+    [Tooltip("Sprint multiplier when not wearing a backpack.")]
+    [SerializeField]
+    private float _sprintMultiplierNoBackpack = 2.7f;
+
+    [Tooltip("Sprint multiplier when wearing a backpack.")]
+    [SerializeField]
+    private float _sprintMultiplierWithBackpack = 2.3f;
     // Height the player can jump
     public float jumpHeight = 1.8f;
     // Gravity force applied to the player
@@ -127,7 +139,8 @@ public class PlayerMovement : MonoBehaviour
         // Final sprinting state
         bool isSprinting = wantsToSprint && canStartSprint && !isCrouching;
         // Apply sprint multiplier to movement speed if sprinting
-        float currentSpeed = moveSpeed * (isSprinting ? sprintMultiplier : 1f);
+        float sprintMult = _hasBackpack ? _sprintMultiplierWithBackpack : _sprintMultiplierNoBackpack;
+        float currentSpeed = moveSpeed * (isSprinting ? sprintMult : 1f);
 
         // Charge and drain logic
         if (isSprinting && !noMovement.Equals(moveDir))
@@ -314,4 +327,6 @@ public class PlayerMovement : MonoBehaviour
 
     // Set method to reset vertical velocity (used by climbing controller when finishing a climb)
     public void ResetVerticalVelocity() => velocity.y = 0f;
+
+    public void SetHasBackpack(bool hasBackpack) => _hasBackpack = hasBackpack;
 }

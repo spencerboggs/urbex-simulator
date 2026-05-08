@@ -24,6 +24,27 @@ public sealed class PlayerCameraMode : MonoBehaviour
     [Min(0.1f)]
     private float _captureCooldownSeconds = 0.4f;
 
+    [Header("Zoom (scroll wheel)")]
+    [Tooltip("FOV at full wide (no zoom). Should match the camera's default FOV.")]
+    [SerializeField]
+    [Range(20f, 120f)]
+    private float _maxFov = 80f;
+
+    [Tooltip("FOV at full telephoto (most zoomed in). Lower = more zoom.")]
+    [SerializeField]
+    [Range(5f, 90f)]
+    private float _minFov = 25f;
+
+    [Tooltip("How much zoom each scroll-wheel notch applies, as a fraction of the W↔T range.")]
+    [SerializeField]
+    [Range(0.01f, 0.5f)]
+    private float _zoomStepFraction = 0.1f;
+
+    [Tooltip("Higher = snappier zoom response. Lower = smoother lerp.")]
+    [SerializeField]
+    [Min(1f)]
+    private float _zoomLerpSpeed = 12f;
+
     private Camera _gameplayCamera;
     private PlayerHUDController _hudController;
     private NetworkObject _networkObject;
@@ -31,12 +52,22 @@ public sealed class PlayerCameraMode : MonoBehaviour
     private GameObject _viewfinderInstance;
     private bool _cameraEquipped;
     private float _nextCaptureAllowedUnscaledTime;
+    private float _defaultFov;
+    private float _zoomTargetT;
+    private float _zoomCurrentT;
+
+    public bool IsEquipped => _cameraEquipped;
 
     private void Awake()
     {
         _gameplayCamera = GetComponentInChildren<Camera>(true);
         _hudController = GetComponent<PlayerHUDController>();
         TryGetComponent(out _networkObject);
+
+        if (_gameplayCamera != null)
+            _defaultFov = _gameplayCamera.fieldOfView;
+        else
+            _defaultFov = _maxFov;
     }
 
     private void Start()
@@ -47,14 +78,11 @@ public sealed class PlayerCameraMode : MonoBehaviour
             _viewfinder = _viewfinderInstance.GetComponent<CameraViewfinderUI>();
             _viewfinderInstance.SetActive(false);
         }
-
-        Invoke(nameof(RefreshHudHint), 0.05f);
     }
 
     private void OnEnable()
     {
-        if (_hudController != null && _hudController.isActiveAndEnabled)
-            Invoke(nameof(RefreshHudHint), 0.05f);
+        _hudController?.SetCameraEquipHint(false, string.Empty);
     }
 
     private void OnDisable()
@@ -87,37 +115,60 @@ public sealed class PlayerCameraMode : MonoBehaviour
         if (_hudController != null && !_hudController.isActiveAndEnabled)
             return;
 
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard == null)
-            return;
-
-        if (keyboard.cKey.wasPressedThisFrame)
-            ToggleCamera();
-
         if (!_cameraEquipped || _viewfinder == null)
             return;
 
         Mouse mouse = Mouse.current;
-        if (mouse != null &&
-            mouse.leftButton.wasPressedThisFrame &&
-            Time.unscaledTime >= _nextCaptureAllowedUnscaledTime)
+        if (mouse != null)
         {
-            TakePhoto();
+            // Scroll up = zoom in (toward T), scroll down = zoom out (toward W)
+            float scrollY = mouse.scroll.ReadValue().y;
+            if (Mathf.Abs(scrollY) > 0.01f)
+            {
+                float step = Mathf.Sign(scrollY) * _zoomStepFraction;
+                _zoomTargetT = Mathf.Clamp01(_zoomTargetT + step);
+            }
+
+            if (mouse.leftButton.wasPressedThisFrame &&
+                Time.unscaledTime >= _nextCaptureAllowedUnscaledTime)
+            {
+                TakePhoto();
+            }
         }
+
+        ApplyZoom();
     }
 
-    private void ToggleCamera()
+    private void ApplyZoom()
+    {
+        if (_gameplayCamera == null)
+            return;
+
+        // Lerp the displayed zoom toward the target so it feels analog
+        float lerpAmount = 1f - Mathf.Exp(-_zoomLerpSpeed * Time.unscaledDeltaTime);
+        _zoomCurrentT = Mathf.Lerp(_zoomCurrentT, _zoomTargetT, lerpAmount);
+
+        float fov = Mathf.Lerp(_maxFov, _minFov, _zoomCurrentT);
+        _gameplayCamera.fieldOfView = fov;
+
+        _viewfinder?.SetZoomLevel(_zoomCurrentT);
+    }
+
+    public void SetEquipped(bool equipped)
     {
         if (_viewfinder == null)
             return;
 
-        _cameraEquipped = !_cameraEquipped;
+        if (_cameraEquipped == equipped)
+            return;
+
+        _cameraEquipped = equipped;
         if (_cameraEquipped)
             EnterCamera();
         else
             ExitCamera();
 
-        RefreshHudHint();
+        _hudController?.SetCameraEquipHint(false, string.Empty);
     }
 
     private void EnterCamera()
@@ -125,7 +176,15 @@ public sealed class PlayerCameraMode : MonoBehaviour
         if (_viewfinderInstance == null)
             return;
 
-        _hudController?.SetMainHudVisual(false);
+        if (_gameplayCamera != null)
+            _defaultFov = _gameplayCamera.fieldOfView;
+
+        _zoomCurrentT = 0f;
+        _zoomTargetT = 0f;
+        if (_gameplayCamera != null)
+            _gameplayCamera.fieldOfView = _maxFov;
+        _viewfinder?.SetZoomLevel(0f);
+
         _viewfinderInstance.SetActive(true);
         UpdateViewfinderHints();
     }
@@ -134,19 +193,11 @@ public sealed class PlayerCameraMode : MonoBehaviour
     {
         if (_viewfinderInstance != null)
             _viewfinderInstance.SetActive(false);
-        _hudController?.SetMainHudVisual(true);
-    }
 
-    private void RefreshHudHint()
-    {
-        if (_hudController == null)
-            return;
-
-        string key = InputBindingDisplay.GetPrimaryKeyboardDisplay("C");
-        if (!_cameraEquipped)
-            _hudController.SetCameraEquipHint(true, $"Press  {key}  — camera");
-        else
-            _hudController.SetCameraEquipHint(false, string.Empty);
+        if (_gameplayCamera != null)
+            _gameplayCamera.fieldOfView = _defaultFov;
+        _zoomCurrentT = 0f;
+        _zoomTargetT = 0f;
     }
 
     private void UpdateViewfinderHints()
@@ -154,8 +205,13 @@ public sealed class PlayerCameraMode : MonoBehaviour
         if (_viewfinder == null)
             return;
 
-        string key = InputBindingDisplay.GetPrimaryKeyboardDisplay("C");
-        _viewfinder.SetControlHints("Click — take photo", key);
+        _viewfinder.SetControlHints("Click — take photo", "C");
+    }
+
+    private void OnValidate()
+    {
+        if (_minFov > _maxFov)
+            _minFov = _maxFov;
     }
 
     private void TakePhoto()

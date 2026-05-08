@@ -66,4 +66,11 @@ public class PlayerHUDController : MonoBehaviour
             return;
         hud.SetCameraEquipHint(visible, line);
     }
+
+    public void SetHotbarState(int availableSlots, int selectedIndex)
+    {
+        if (hud == null)
+            return;
+        hud.SetHotbarState(availableSlots, selectedIndex);
+    }
 }

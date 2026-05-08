@@ -7,10 +7,12 @@ public class PlayerHUD : MonoBehaviour
     private VisualElement staminaFill;
     private VisualElement cameraHintRow;
     private Label cameraHintLabel;
+    private VisualElement hotbarRoot;
+    private VisualElement[] hotbarSlots;
 
     private void TryBindFills()
     {
-        if (healthFill != null && staminaFill != null)
+        if (healthFill != null && staminaFill != null && hotbarRoot != null && hotbarSlots != null)
             return;
 
         var doc = GetComponent<UIDocument>();
@@ -29,6 +31,16 @@ public class PlayerHUD : MonoBehaviour
             cameraHintRow = root.Q<VisualElement>("cameraHintRow");
         if (cameraHintLabel == null)
             cameraHintLabel = root.Q<Label>("cameraHintLabel");
+
+        if (hotbarRoot == null)
+            hotbarRoot = root.Q<VisualElement>("hotbarRoot");
+
+        if (hotbarSlots == null || hotbarSlots.Length != 5)
+        {
+            hotbarSlots = new VisualElement[5];
+            for (int i = 0; i < hotbarSlots.Length; i++)
+                hotbarSlots[i] = root.Q<VisualElement>($"hotbarSlot{i}");
+        }
     }
 
     public void SetCameraEquipHint(bool visible, string line)
@@ -75,6 +87,28 @@ public class PlayerHUD : MonoBehaviour
         else
         {
             staminaFill.style.backgroundColor = Color.red;
+        }
+    }
+
+    public void SetHotbarState(int availableSlots, int selectedIndex)
+    {
+        TryBindFills();
+        if (hotbarSlots == null)
+            return;
+
+        availableSlots = Mathf.Clamp(availableSlots, 0, hotbarSlots.Length);
+        if (selectedIndex >= hotbarSlots.Length)
+            selectedIndex = hotbarSlots.Length - 1;
+
+        for (int i = 0; i < hotbarSlots.Length; i++)
+        {
+            VisualElement slot = hotbarSlots[i];
+            if (slot == null)
+                continue;
+
+            bool isAvailable = i < availableSlots;
+            slot.EnableInClassList("hotbarSlotUnavailable", !isAvailable);
+            slot.EnableInClassList("hotbarSlotSelected", isAvailable && selectedIndex >= 0 && i == selectedIndex);
         }
     }
 }

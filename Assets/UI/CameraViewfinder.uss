@@ -1,87 +1,123 @@
-#viewfinderRoot {
-    flex-grow: 1;
-    width: 100%;
-    height: 100%;
-    background-color: rgb(8, 8, 10);
-}
-
-#letterbox {
-    flex-grow: 1;
-    justify-content: center;
-    align-items: center;
-    padding: 24px;
-}
-
+/* viewfinderFrame is a top-level UXML element, so its parent is the UIDocument
+ * rootVisualElement which always has the full panel size. 70% width / 70%
+ * height centered via 15% offsets keeps the camera HUD clear of the player's
+ * health/stamina bars and the inventory hotbar. */
 #viewfinderFrame {
-    width: 88%;
-    max-width: 1200px;
-    aspect-ratio: 4 / 3;
-    border-width: 3px;
-    border-color: rgb(28, 28, 32);
-    border-radius: 4px;
-    background-color: rgba(0, 0, 0, 0.15);
-    position: relative;
+    position: absolute;
+    width: 70%;
+    height: 70%;
+    left: 15%;
+    top: 15%;
+    border-left-width: 3px;
+    border-right-width: 3px;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+    border-left-color: rgb(28, 28, 32);
+    border-right-color: rgb(28, 28, 32);
+    border-top-color: rgb(28, 28, 32);
+    border-bottom-color: rgb(28, 28, 32);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.08);
 }
 
 #viewfinderInner {
     position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    margin: 12px;
-    border-width: 2px;
-    border-color: rgba(200, 200, 210, 0.35);
-    border-radius: 2px;
+    left: 12px;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-color: rgba(200, 200, 210, 0.35);
+    border-right-color: rgba(200, 200, 210, 0.35);
+    border-top-color: rgba(200, 200, 210, 0.35);
+    border-bottom-color: rgba(200, 200, 210, 0.35);
 }
 
+/* Chunky L-shaped corner brackets, like a camcorder viewfinder */
 .cornerTick {
     position: absolute;
-    width: 18px;
-    height: 18px;
-    border-color: rgba(255, 255, 255, 0.55);
+    width: 46px;
+    height: 46px;
+    border-left-color: rgba(255, 255, 255, 0.78);
+    border-right-color: rgba(255, 255, 255, 0.78);
+    border-top-color: rgba(255, 255, 255, 0.78);
+    border-bottom-color: rgba(255, 255, 255, 0.78);
 }
 
 #tickTL {
-    left: 6px;
-    top: 6px;
-    border-left-width: 3px;
-    border-top-width: 3px;
+    left: 10px;
+    top: 10px;
+    border-left-width: 4px;
+    border-top-width: 4px;
 }
 
 #tickTR {
-    right: 6px;
-    top: 6px;
-    border-right-width: 3px;
-    border-top-width: 3px;
+    right: 10px;
+    top: 10px;
+    border-right-width: 4px;
+    border-top-width: 4px;
 }
 
 #tickBL {
-    left: 6px;
-    bottom: 6px;
-    border-left-width: 3px;
-    border-bottom-width: 3px;
+    left: 10px;
+    bottom: 10px;
+    border-left-width: 4px;
+    border-bottom-width: 4px;
 }
 
 #tickBR {
-    right: 6px;
-    bottom: 6px;
-    border-right-width: 3px;
-    border-bottom-width: 3px;
+    right: 10px;
+    bottom: 10px;
+    border-right-width: 4px;
+    border-bottom-width: 4px;
 }
 
+/* Center focus reticle (small +) */
+#centerReticle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 22px;
+    height: 22px;
+    margin-left: -11px;
+    margin-top: -11px;
+}
+
+#reticleH {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    margin-top: -1px;
+    background-color: rgba(255, 255, 255, 0.55);
+}
+
+#reticleV {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    margin-left: -1px;
+    background-color: rgba(255, 255, 255, 0.55);
+}
+
+/* Subtle CRT dim overlay (no gradient — Unity 6 USS gradients can crash the
+ * style applier in the asset preview path). */
 #crtScanlines {
     position: absolute;
     left: 0;
     top: 0;
     right: 0;
     bottom: 0;
-    background-image: repeating-linear-gradient(
-        rgba(0, 0, 0, 0) 0px,
-        rgba(0, 0, 0, 0) 2px,
-        rgba(0, 0, 0, 0.12) 2px,
-        rgba(0, 0, 0, 0.12) 3px
-    );
+    background-color: rgba(0, 0, 0, 0.06);
 }
 
 #topBar {
@@ -89,48 +125,149 @@
     left: 0;
     right: 0;
     top: 0;
-    height: 36px;
+    height: 56px;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding-left: 16px;
-    padding-right: 16px;
-    padding-top: 8px;
+    padding-left: 70px;
+    padding-right: 70px;
+    padding-top: 14px;
 }
 
-#recDot {
-    width: 10px;
-    height: 10px;
-    border-radius: 5px;
-    background-color: rgb(220, 40, 40);
-    margin-right: 8px;
+.modeGroup {
+    flex-direction: row;
+    align-items: center;
 }
 
-.recBlink {
-    opacity: 0.35;
-    transition-duration: 0.45s;
-    transition-property: opacity;
-}
-
-.recBlinkOn {
-    opacity: 1;
-}
-
-#batteryLabel {
-    font-size: 13px;
-    color: rgba(200, 200, 210, 0.85);
+.modeLabel {
+    font-size: 17px;
+    color: rgb(225, 215, 110);
     -unity-font-style: bold;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(225, 215, 110, 0.65);
+    border-right-color: rgba(225, 215, 110, 0.65);
+    border-top-color: rgba(225, 215, 110, 0.65);
+    border-bottom-color: rgba(225, 215, 110, 0.65);
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-left-radius: 3px;
+    border-bottom-right-radius: 3px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Battery group: label + visual battery icon */
+.batteryGroup {
+    flex-direction: row;
+    align-items: center;
+}
+
+.batteryText {
+    font-size: 15px;
+    color: rgba(210, 210, 220, 0.9);
+    -unity-font-style: bold;
+    margin-right: 10px;
+}
+
+.batteryIcon {
+    flex-direction: row;
+    align-items: center;
+}
+
+.batteryShell {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    width: 50px;
+    height: 22px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-color: rgba(220, 220, 230, 0.85);
+    border-right-color: rgba(220, 220, 230, 0.85);
+    border-top-color: rgba(220, 220, 230, 0.85);
+    border-bottom-color: rgba(220, 220, 230, 0.85);
+    border-top-left-radius: 2px;
+    border-top-right-radius: 2px;
+    border-bottom-left-radius: 2px;
+    border-bottom-right-radius: 2px;
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    background-color: rgba(0, 0, 0, 0.45);
+}
+
+.batteryCell {
+    flex-grow: 1;
+    height: 100%;
+    margin-left: 1px;
+    margin-right: 1px;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.batteryCellOn {
+    background-color: rgb(120, 220, 130);
+}
+
+.batteryTerminal {
+    width: 4px;
+    height: 11px;
+    margin-left: 2px;
+    background-color: rgba(220, 220, 230, 0.85);
 }
 
 #stampLabel {
     position: absolute;
-    left: 20px;
-    bottom: 52px;
-    font-size: 15px;
+    left: 70px;
+    bottom: 64px;
+    font-size: 18px;
     color: rgb(110, 200, 130);
     -unity-font-style: bold;
-    text-shadow: 1px 1px 2px rgb(0, 0, 0);
-    letter-spacing: 1px;
+}
+
+/* Zoom indicator: W [====     ] T */
+#zoomGroup {
+    position: absolute;
+    right: 70px;
+    bottom: 64px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.zoomLabel {
+    font-size: 14px;
+    color: rgba(220, 220, 230, 0.85);
+    -unity-font-style: bold;
+}
+
+#zoomTrack {
+    width: 160px;
+    height: 9px;
+    margin-left: 8px;
+    margin-right: 8px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(220, 220, 230, 0.65);
+    border-right-color: rgba(220, 220, 230, 0.65);
+    border-top-color: rgba(220, 220, 230, 0.65);
+    border-bottom-color: rgba(220, 220, 230, 0.65);
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+#zoomFill {
+    height: 100%;
+    width: 0%;
+    background-color: rgba(120, 220, 130, 0.85);
 }
 
 #bottomHints {
@@ -147,24 +284,11 @@
 }
 
 .hintLabel {
-    font-size: 14px;
+    font-size: 17px;
     color: rgba(230, 230, 235, 0.92);
-    margin-left: 12px;
-    margin-right: 12px;
+    margin-left: 14px;
+    margin-right: 14px;
     -unity-font-style: bold;
-}
-
-.keyPill {
-    border-width: 1px;
-    border-color: rgba(255, 255, 255, 0.35);
-    border-radius: 4px;
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-    background-color: rgba(0, 0, 0, 0.45);
-    font-size: 13px;
-    color: rgb(255, 240, 200);
 }
 
 #shutterFlash {
@@ -177,18 +301,6 @@
     opacity: 0;
 }
 
-.flashActive {
-    opacity: 0.92;
-    transition-duration: 0.05s;
-    transition-property: opacity;
-}
-
-.flashFade {
-    opacity: 0;
-    transition-duration: 0.22s;
-    transition-property: opacity;
-}
-
 #savedToast {
     position: absolute;
     left: 0;
@@ -197,19 +309,26 @@
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition-duration: 0.15s;
-    transition-property: opacity;
 }
 
-#savedToast.visible {
+.savedToastVisible {
     opacity: 1;
 }
 
 #savedToastInner {
     background-color: rgba(20, 20, 24, 0.92);
-    border-width: 1px;
-    border-color: rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(255, 255, 255, 0.2);
+    border-right-color: rgba(255, 255, 255, 0.2);
+    border-top-color: rgba(255, 255, 255, 0.2);
+    border-bottom-color: rgba(255, 255, 255, 0.2);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
     padding-left: 22px;
     padding-right: 22px;
     padding-top: 12px;
