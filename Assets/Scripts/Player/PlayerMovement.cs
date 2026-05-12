@@ -63,6 +63,10 @@ public class PlayerMovement : MonoBehaviour
     // Multiplier for crouch height (scale factor)
     public float crouchHeightMultiplier = 0.5f;
 
+    [SerializeField]
+    [Tooltip("Temporary kill switch until crouching is reworked to avoid scaling the whole player.")]
+    private bool _crouchEnabled = false;
+
     [Tooltip("Layers counted as blocking when checking headroom to stand up.")]
     [SerializeField]
     private LayerMask _crouchObstructionMask = ~0;
@@ -182,7 +186,10 @@ public class PlayerMovement : MonoBehaviour
 
         /* Crouch handling */
         // Check if the player is trying to crouch (holding Left Ctrl)
-        bool crouchInput = Keyboard.current.leftCtrlKey.isPressed;
+        bool crouchInput = _crouchEnabled && Keyboard.current.leftCtrlKey.isPressed;
+
+        if (!_crouchEnabled)
+            isCrouching = false;
 
         if (isGrounded && crouchInput)
             isCrouching = true;
@@ -197,13 +204,13 @@ public class PlayerMovement : MonoBehaviour
             isCrouching = true;
 
         // Apply crouch/stand changes to the character controller height and center
-        float targetHeight = isCrouching ? crouchHeight : originalHeight;
+        float targetHeight = (_crouchEnabled && isCrouching) ? crouchHeight : originalHeight;
 
         // compute height delta BEFORE applying
         float previousHeight = controller.height;
 
         controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * 15f);
-        if (isCrouching)
+        if (_crouchEnabled && isCrouching)
         {
             // When crouching, we want to lower the center to keep the bottom of the capsule fixed
             controller.center = new Vector3(0f, controller.height / 2f - 0.4f, 0f);

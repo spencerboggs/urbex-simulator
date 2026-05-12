@@ -14,20 +14,35 @@
         </ui:VisualElement>
     </ui:VisualElement>
     <ui:VisualElement name="hotbarRoot">
-        <ui:VisualElement name="hotbarSlot0" class="hotbarSlot">
-            <ui:Label name="hotbarSlot0Label" text="C" class="hotbarSlotLabel" />
+        <ui:VisualElement name="hotbarSlot0Column" class="hotbarSlotColumn">
+            <ui:VisualElement name="hotbarSlot0" class="hotbarSlot">
+                <ui:Label name="hotbarSlot0Item" text="camera" class="hotbarItemLabel" />
+            </ui:VisualElement>
+            <ui:Label name="hotbarSlot0Key" text="C" class="hotbarKeyLabel" />
         </ui:VisualElement>
-        <ui:VisualElement name="hotbarSlot1" class="hotbarSlot">
-            <ui:Label name="hotbarSlot1Label" text="1" class="hotbarSlotLabel" />
+        <ui:VisualElement name="hotbarSlot1Column" class="hotbarSlotColumn">
+            <ui:VisualElement name="hotbarSlot1" class="hotbarSlot">
+                <ui:Label name="hotbarSlot1Item" text="" class="hotbarItemLabel" />
+            </ui:VisualElement>
+            <ui:Label name="hotbarSlot1Key" text="1" class="hotbarKeyLabel" />
         </ui:VisualElement>
-        <ui:VisualElement name="hotbarSlot2" class="hotbarSlot">
-            <ui:Label name="hotbarSlot2Label" text="2" class="hotbarSlotLabel" />
+        <ui:VisualElement name="hotbarSlot2Column" class="hotbarSlotColumn">
+            <ui:VisualElement name="hotbarSlot2" class="hotbarSlot">
+                <ui:Label name="hotbarSlot2Item" text="" class="hotbarItemLabel" />
+            </ui:VisualElement>
+            <ui:Label name="hotbarSlot2Key" text="2" class="hotbarKeyLabel" />
         </ui:VisualElement>
-        <ui:VisualElement name="hotbarSlot3" class="hotbarSlot">
-            <ui:Label name="hotbarSlot3Label" text="3" class="hotbarSlotLabel" />
+        <ui:VisualElement name="hotbarSlot3Column" class="hotbarSlotColumn">
+            <ui:VisualElement name="hotbarSlot3" class="hotbarSlot">
+                <ui:Label name="hotbarSlot3Item" text="" class="hotbarItemLabel" />
+            </ui:VisualElement>
+            <ui:Label name="hotbarSlot3Key" text="3" class="hotbarKeyLabel" />
         </ui:VisualElement>
-        <ui:VisualElement name="hotbarSlot4" class="hotbarSlot">
-            <ui:Label name="hotbarSlot4Label" text="4" class="hotbarSlotLabel" />
+        <ui:VisualElement name="hotbarSlot4Column" class="hotbarSlotColumn">
+            <ui:VisualElement name="hotbarSlot4" class="hotbarSlot">
+                <ui:Label name="hotbarSlot4Item" text="" class="hotbarItemLabel" />
+            </ui:VisualElement>
+            <ui:Label name="hotbarSlot4Key" text="4" class="hotbarKeyLabel" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

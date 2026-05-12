@@ -168,6 +168,8 @@ public sealed class PlayerLocalControls : NetworkBehaviour
                 hud.enabled = gameplay;
             if (TryGetComponent(out PlayerCameraMode cameraMode))
                 cameraMode.enabled = gameplay;
+            if (TryGetComponent(out PlayerFlashlightMode flashlightMode))
+                flashlightMode.enabled = gameplay;
             if (TryGetComponent(out PlayerInventoryController inventory))
                 inventory.enabled = gameplay;
             _lastOwnerStagingForComponents = staging;

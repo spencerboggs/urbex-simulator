@@ -35,6 +35,9 @@ public class PlayerHUDController : MonoBehaviour
 
         if (hud != null)
             _hudDocument = hud.GetComponent<UIDocument>();
+
+        if (TryGetComponent(out PlayerInventoryController inventory))
+            inventory.RefreshHudState();
     }
 
     private void Update()
@@ -60,11 +63,16 @@ public class PlayerHUDController : MonoBehaviour
             _hudDocument.rootVisualElement.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
     }
 
-    public void SetCameraEquipHint(bool visible, string line)
+    public void SetContextHint(bool visible, string line)
     {
         if (hud == null)
             return;
-        hud.SetCameraEquipHint(visible, line);
+        hud.SetContextHint(visible, line);
+    }
+
+    public void SetCameraEquipHint(bool visible, string line)
+    {
+        SetContextHint(visible, line);
     }
 
     public void SetHotbarState(int availableSlots, int selectedIndex)
@@ -72,5 +80,12 @@ public class PlayerHUDController : MonoBehaviour
         if (hud == null)
             return;
         hud.SetHotbarState(availableSlots, selectedIndex);
+    }
+
+    public void SetHotbarState(int availableSlots, int selectedIndex, string[] slotItemNames, string[] slotKeyLabels)
+    {
+        if (hud == null)
+            return;
+        hud.SetHotbarState(availableSlots, selectedIndex, slotItemNames, slotKeyLabels);
     }
 }

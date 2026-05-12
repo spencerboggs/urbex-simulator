@@ -9,10 +9,17 @@ public class PlayerHUD : MonoBehaviour
     private Label cameraHintLabel;
     private VisualElement hotbarRoot;
     private VisualElement[] hotbarSlots;
+    private Label[] hotbarItemLabels;
+    private Label[] hotbarKeyLabels;
 
     private void TryBindFills()
     {
-        if (healthFill != null && staminaFill != null && hotbarRoot != null && hotbarSlots != null)
+        if (healthFill != null &&
+            staminaFill != null &&
+            hotbarRoot != null &&
+            hotbarSlots != null &&
+            hotbarItemLabels != null &&
+            hotbarKeyLabels != null)
             return;
 
         var doc = GetComponent<UIDocument>();
@@ -38,18 +45,29 @@ public class PlayerHUD : MonoBehaviour
         if (hotbarSlots == null || hotbarSlots.Length != 5)
         {
             hotbarSlots = new VisualElement[5];
+            hotbarItemLabels = new Label[5];
+            hotbarKeyLabels = new Label[5];
             for (int i = 0; i < hotbarSlots.Length; i++)
+            {
                 hotbarSlots[i] = root.Q<VisualElement>($"hotbarSlot{i}");
+                hotbarItemLabels[i] = root.Q<Label>($"hotbarSlot{i}Item");
+                hotbarKeyLabels[i] = root.Q<Label>($"hotbarSlot{i}Key");
+            }
         }
     }
 
-    public void SetCameraEquipHint(bool visible, string line)
+    public void SetContextHint(bool visible, string line)
     {
         TryBindFills();
         if (cameraHintLabel != null && !string.IsNullOrEmpty(line))
             cameraHintLabel.text = line;
         if (cameraHintRow != null)
             cameraHintRow.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    public void SetCameraEquipHint(bool visible, string line)
+    {
+        SetContextHint(visible, line);
     }
 
     public void SetHealth(float percent)
@@ -90,7 +108,7 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
-    public void SetHotbarState(int availableSlots, int selectedIndex)
+    public void SetHotbarState(int availableSlots, int selectedIndex, string[] slotItemNames = null, string[] slotKeyLabels = null)
     {
         TryBindFills();
         if (hotbarSlots == null)
@@ -109,6 +127,27 @@ public class PlayerHUD : MonoBehaviour
             bool isAvailable = i < availableSlots;
             slot.EnableInClassList("hotbarSlotUnavailable", !isAvailable);
             slot.EnableInClassList("hotbarSlotSelected", isAvailable && selectedIndex >= 0 && i == selectedIndex);
+
+            if (hotbarItemLabels != null && i < hotbarItemLabels.Length && hotbarItemLabels[i] != null)
+            {
+                hotbarItemLabels[i].text =
+                    slotItemNames != null &&
+                    i < slotItemNames.Length &&
+                    !string.IsNullOrEmpty(slotItemNames[i])
+                        ? slotItemNames[i]
+                        : string.Empty;
+            }
+
+            if (hotbarKeyLabels != null && i < hotbarKeyLabels.Length && hotbarKeyLabels[i] != null)
+            {
+                hotbarKeyLabels[i].text =
+                    slotKeyLabels != null &&
+                    i < slotKeyLabels.Length &&
+                    !string.IsNullOrEmpty(slotKeyLabels[i])
+                        ? slotKeyLabels[i]
+                        : string.Empty;
+                hotbarKeyLabels[i].EnableInClassList("hotbarKeyLabelUnavailable", !isAvailable);
+            }
         }
     }
 }
