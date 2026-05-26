@@ -170,6 +170,7 @@ MonoBehaviour:
   airControlMultiplier: 0.6
   fallMultiplier: 1.05
   crouchHeightMultiplier: 0.5
+  _crouchEnabled: 0
   _crouchObstructionMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -194,6 +195,16 @@ MonoBehaviour:
   heightOffset: 1.2
   clearanceHeight: 1.2
   climbSpeed: 4
+  climbableTag: Climbable
+  wallClingDetectDistance: 0.65
+  wallClingCheckRadius: 0.2
+  wallClingDistance: 0.45
+  wallClimbVerticalSpeed: 2
+  wallClimbHorizontalSpeed: 2.5
+  wallClingReattachCooldown: 0.25
+  wallClingJumpOffPush: 0.35
+  maxWallTiltFromVertical: 30
+  wallClingTopOutDuration: 0.8
 --- !u!114 &1626239779872317595
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -240,10 +251,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e314dc66a7af1af4bb343cec009f5c1b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInventoryController
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 2723982658518787085}
+  _networkObjectCache: {fileID: 2723982658518787085}
   _hasBackpack: 0
   _slotsWithoutBackpack: 3
   _slotsWithBackpack: 5
+  _startWithFlashlight: 1
   _selectedSlotIndex: -1
+  _pickupRange: 3
+  _dropForwardDistance: 0.95
+  _dropUpOffset: -0.08
+  _dropForwardImpulse: 2.25
+  _dropUpImpulse: 0.8
 --- !u!114 &4321056900894402751
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -256,9 +276,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 825e30eebb92d6d4eb64a7bd562b0c5e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
-  _componentIndexCache: 255
+  _componentIndexCache: 1
   _addedNetworkObject: {fileID: 2723982658518787085}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 2723982658518787085}
   _maxHealth: 100
   _healthRegenDelaySeconds: 3
   _healthRegenPerSecond: 10
@@ -277,9 +297,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c8f4e2a91d6b4c5e8a3f7b2d9e1c0a4f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
-  _componentIndexCache: 255
+  _componentIndexCache: 2
   _addedNetworkObject: {fileID: 2723982658518787085}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 2723982658518787085}
   _remoteInterpolationDelaySeconds: 0.1
   _remoteVelocityExtrapolationBlend: 0.35
   _remoteMaxExtrapolationSeconds: 0.08
@@ -315,7 +335,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 7380173937860289985
+  <AssetPathHash>k__BackingField: 779990065998739053
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 5, z: 0}
@@ -329,8 +349,9 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours:
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 7011122233445566888}
+  - {fileID: 4321056900894402751}
+  - {fileID: 3847592018374659999}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -341,7 +362,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584249749612475534
+  _initializedTimestamp: -8584217860342329117
 --- !u!1 &4487654722471429204
 GameObject:
   m_ObjectHideFlags: 0

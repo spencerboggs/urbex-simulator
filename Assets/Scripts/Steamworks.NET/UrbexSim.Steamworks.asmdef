@@ -1,0 +1,23 @@
+{
+    "name": "UrbexSim.Steamworks",
+    "rootNamespace": "",
+    "references": [
+        "com.rlabrecque.steamworks.net"
+    ],
+    "includePlatforms": [
+        "Android",
+        "Editor",
+        "LinuxStandalone64",
+        "macOSStandalone",
+        "WindowsStandalone32",
+        "WindowsStandalone64"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

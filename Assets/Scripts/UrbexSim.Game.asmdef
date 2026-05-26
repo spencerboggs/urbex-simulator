@@ -1,0 +1,20 @@
+{
+    "name": "UrbexSim.Game",
+    "rootNamespace": "",
+    "references": [
+        "UrbexSim.Core",
+        "UrbexSim.Input",
+        "UrbexSim.Inventory",
+        "FishNet.Runtime",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
