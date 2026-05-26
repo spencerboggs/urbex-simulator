@@ -2149,7 +2149,7 @@ GameObject:
   - component: {fileID: 396757705}
   m_Layer: 0
   m_Name: Cube (17)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2821,7 +2821,7 @@ GameObject:
   - component: {fileID: 695001637}
   m_Layer: 0
   m_Name: Cube (22)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2933,7 +2933,7 @@ GameObject:
   - component: {fileID: 705879899}
   m_Layer: 0
   m_Name: Cube (20)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -3269,7 +3269,7 @@ GameObject:
   - component: {fileID: 755626964}
   m_Layer: 0
   m_Name: Cube (19)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -4219,7 +4219,7 @@ GameObject:
   - component: {fileID: 1027036542}
   m_Layer: 0
   m_Name: Cube (23)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -5884,7 +5884,7 @@ GameObject:
   - component: {fileID: 1431582615}
   m_Layer: 0
   m_Name: Cube (21)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -6556,7 +6556,7 @@ GameObject:
   - component: {fileID: 1664770476}
   m_Layer: 0
   m_Name: Cube (18)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -7890,7 +7890,7 @@ GameObject:
   - component: {fileID: 2124423983}
   m_Layer: 0
   m_Name: Cube (24)
-  m_TagString: Untagged
+  m_TagString: Climbable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
