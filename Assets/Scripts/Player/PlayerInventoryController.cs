@@ -32,11 +32,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     [Range(-1, 4)]
     private int _selectedSlotIndex = -1;
 
-    [Header("Pickup")]
-    [SerializeField]
-    [Min(0.5f)]
-    private float _pickupRange = 3f;
-
+    [Header("Drop")]
     [SerializeField]
     [Min(0.1f)]
     private float _dropForwardDistance = 0.95f;
@@ -57,7 +53,6 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     private PlayerFlashlightMode _flashlightMode;
     private PlayerMovement _movement;
     private Camera _gameplayCamera;
-    private WorldInventoryItem _focusedWorldItem;
     private InventoryItemType[] _slotItems = new InventoryItemType[MaxHotbarSlots];
     private readonly string[] _slotItemLabels = new string[MaxHotbarSlots];
     private bool _inventoryInitialized;
@@ -88,17 +83,23 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (!TryGetComponent(out _flashlightMode))
             _flashlightMode = gameObject.AddComponent<PlayerFlashlightMode>();
 
+        // Pickup raycast, Interact key, and the HUD context prompts all live on
+        // PlayerInteractor. Auto-add it so existing player prefabs/scenes don't
+        // silently lose pickup + interaction when this script is updated.
+        if (!TryGetComponent<PlayerInteractor>(out _))
+            gameObject.AddComponent<PlayerInteractor>();
+
         EnsureInventoryInitialized();
     }
 
-    private bool IsLocalControllingPlayer()
+    public bool IsLocalControllingPlayer()
     {
         if (!IsSpawned)
             return true;
         return IsOwner;
     }
 
-    private bool ShouldPublishHud()
+    public bool ShouldPublishHud()
     {
         return !IsSpawned || IsOwner;
     }
@@ -115,7 +116,6 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         base.OnStartClient();
         EnsureInventoryInitialized();
         ApplySelection(publishHud: true);
-        UpdateContextHint();
     }
 
     private void Start()
@@ -124,7 +124,6 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             _selectedSlotIndex = -1;
         ApplyBackpackState();
         ApplySelection(publishHud: true);
-        UpdateContextHint();
     }
 
     private void OnEnable()
@@ -133,7 +132,6 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         EnsureInventoryInitialized();
         ApplyBackpackState();
         ApplySelection(publishHud: true);
-        UpdateContextHint();
     }
 
     private void Update()
@@ -147,21 +145,16 @@ public sealed class PlayerInventoryController : NetworkBehaviour
 
         HandleSelectionInput(kb);
 
-        if (kb.qKey.wasPressedThisFrame)
+        // Drop key is migrated to the configurable keybind system. Pickup (E) and
+        // all other interactions are now handled by PlayerInteractor on the same
+        // GameObject - see Player/PlayerInteractor.cs
+        if (KeybindManager.WasPressedThisFrame(KeybindAction.Drop))
             DropSelectedItem();
-
-        UpdateFocusedWorldItem();
-
-        if (kb.eKey.wasPressedThisFrame)
-            TryPickupFocusedItem();
-
-        UpdateContextHint();
     }
 
     public void RefreshHudState()
     {
         ApplySelection(publishHud: true);
-        UpdateContextHint();
     }
 
     private void EnsureInventoryInitialized()
@@ -370,100 +363,59 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplySelection(publishHud: true);
     }
 
-    private void TryPickupFocusedItem()
+    // True if the given item type can fit somewhere in the player's hotbar right
+    // now. Used by PlayerInteractor for the "Press E to pick up X" / "No empty slot"
+    // HUD prompt.
+    public bool CanPickup(InventoryItemType itemType)
     {
-        UpdateFocusedWorldItem();
-        if (_focusedWorldItem == null)
+        if (!IsLocalControllingPlayer())
+            return false;
+        return TryGetPickupSlot(itemType, out _);
+    }
+
+    // Called by PlayerInteractor when the Interact key is pressed while a world
+    // item is focused. Mirrors the previous TryPickupFocusedItem logic but takes
+    // the focused item from the caller instead of resolving it via an internal
+    // raycast.
+    public void RequestPickup(WorldInventoryItem worldItem)
+    {
+        if (worldItem == null || !IsLocalControllingPlayer())
             return;
 
-        if (!TryGetPickupSlot(_focusedWorldItem.ItemType, out int slotIndex))
+        if (!TryGetPickupSlot(worldItem.ItemType, out int slotIndex))
             return;
 
         if (!IsSpawned)
         {
-            _slotItems[slotIndex] = _focusedWorldItem.ItemType;
-            Destroy(_focusedWorldItem.gameObject);
-            _focusedWorldItem = null;
+            _slotItems[slotIndex] = worldItem.ItemType;
+            Destroy(worldItem.gameObject);
             ApplySelection(publishHud: true);
             return;
         }
 
         if (IsServerStarted)
-            ServerTryPickupWorldItem(_focusedWorldItem.NetworkItemId);
+            ServerTryPickupWorldItem(worldItem.NetworkItemId);
         else
-            RpcRequestPickupWorldItem(_focusedWorldItem.NetworkItemId);
+            RpcRequestPickupWorldItem(worldItem.NetworkItemId);
     }
 
-    private void UpdateFocusedWorldItem()
+    // Produces the "Q drop Flashlight" hint when nothing more important (an
+    // interactable / world item) is in front of the player. PlayerInteractor calls
+    // this as the lowest-priority HUD prompt source.
+    public bool TryGetDropPrompt(out string prompt)
     {
-        _focusedWorldItem = FindFocusedWorldItem();
-    }
+        prompt = string.Empty;
 
-    private WorldInventoryItem FindFocusedWorldItem()
-    {
-        if (_gameplayCamera == null)
-            _gameplayCamera = GetComponentInChildren<Camera>(true);
-
-        Transform viewpoint = _gameplayCamera != null ? _gameplayCamera.transform : transform;
-        RaycastHit[] hits = Physics.RaycastAll(
-            viewpoint.position,
-            viewpoint.forward,
-            _pickupRange,
-            ~0,
-            QueryTriggerInteraction.Ignore);
-
-        WorldInventoryItem closest = null;
-        float closestDistance = float.MaxValue;
-
-        for (int i = 0; i < hits.Length; i++)
-        {
-            RaycastHit hit = hits[i];
-            if (hit.collider == null || hit.collider.transform.IsChildOf(transform))
-                continue;
-
-            WorldInventoryItem item = hit.collider.GetComponentInParent<WorldInventoryItem>();
-            if (item == null)
-                continue;
-
-            if (hit.distance < closestDistance)
-            {
-                closest = item;
-                closestDistance = hit.distance;
-            }
-        }
-
-        return closest;
-    }
-
-    private void UpdateContextHint()
-    {
-        if (_hudController == null || !ShouldPublishHud())
-            return;
-
-        if (_focusedWorldItem != null)
-        {
-            if (TryGetPickupSlot(_focusedWorldItem.ItemType, out _))
-            {
-                string pickupKey = InputBindingDisplay.GetPrimaryKeyboardDisplay("E");
-                _hudController.SetContextHint(true, $"Press {pickupKey} to pick up {_focusedWorldItem.DisplayName}");
-            }
-            else
-            {
-                _hudController.SetContextHint(true, $"No empty slot for {_focusedWorldItem.DisplayName}");
-            }
-
-            return;
-        }
+        if (!ShouldPublishHud())
+            return false;
 
         InventoryItemType selectedItem = GetSelectedItem();
-        if (_selectedSlotIndex > 0 && InventoryItemCatalog.CanDrop(selectedItem))
-        {
-            string dropKey = InputBindingDisplay.GetPrimaryKeyboardDisplay("Q");
-            _hudController.SetContextHint(true, $"{dropKey} drop {InventoryItemCatalog.GetDisplayName(selectedItem)}");
-            return;
-        }
+        if (_selectedSlotIndex <= 0 || !InventoryItemCatalog.CanDrop(selectedItem))
+            return false;
 
-        _hudController.SetContextHint(false, string.Empty);
+        string dropKey = KeybindManager.GetDisplayName(KeybindAction.Drop);
+        prompt = $"{dropKey} drop {InventoryItemCatalog.GetDisplayName(selectedItem)}";
+        return true;
     }
 
     private void ApplyInventoryState(
@@ -483,7 +435,6 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         _inventoryInitialized = true;
 
         ApplySelection(publishHud: true);
-        UpdateContextHint();
     }
 
     private void BroadcastInventoryState()
