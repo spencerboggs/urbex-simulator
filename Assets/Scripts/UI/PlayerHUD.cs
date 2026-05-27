@@ -8,6 +8,9 @@ public class PlayerHUD : MonoBehaviour
     private VisualElement cameraHintRow;
     private Label cameraHintLabel;
     private VisualElement hotbarRoot;
+    private VisualElement itemKeyHintsRow;
+    private Label itemKeyHintLine0;
+    private Label itemKeyHintLine1;
     private VisualElement[] hotbarSlots;
     private Label[] hotbarItemLabels;
     private Label[] hotbarKeyLabels;
@@ -41,6 +44,12 @@ public class PlayerHUD : MonoBehaviour
 
         if (hotbarRoot == null)
             hotbarRoot = root.Q<VisualElement>("hotbarRoot");
+        if (itemKeyHintsRow == null)
+            itemKeyHintsRow = root.Q<VisualElement>("itemKeyHintsRow");
+        if (itemKeyHintLine0 == null)
+            itemKeyHintLine0 = root.Q<Label>("itemKeyHintLine0");
+        if (itemKeyHintLine1 == null)
+            itemKeyHintLine1 = root.Q<Label>("itemKeyHintLine1");
 
         if (hotbarSlots == null || hotbarSlots.Length != 5)
         {
@@ -105,6 +114,28 @@ public class PlayerHUD : MonoBehaviour
         else
         {
             staminaFill.style.backgroundColor = Color.red;
+        }
+    }
+
+    public void SetItemKeyHints(bool visible, string line0, string line1 = null)
+    {
+        TryBindFills();
+
+        if (itemKeyHintsRow != null)
+            itemKeyHintsRow.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+
+        if (itemKeyHintLine0 != null)
+        {
+            itemKeyHintLine0.text = line0 ?? string.Empty;
+            itemKeyHintLine0.style.display =
+                visible && !string.IsNullOrEmpty(line0) ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        if (itemKeyHintLine1 != null)
+        {
+            itemKeyHintLine1.text = line1 ?? string.Empty;
+            itemKeyHintLine1.style.display =
+                visible && !string.IsNullOrEmpty(line1) ? DisplayStyle.Flex : DisplayStyle.None;
         }
     }
 

@@ -88,4 +88,11 @@ public class PlayerHUDController : MonoBehaviour
             return;
         hud.SetHotbarState(availableSlots, selectedIndex, slotItemNames, slotKeyLabels);
     }
+
+    public void SetItemKeyHints(bool visible, string line0, string line1 = null)
+    {
+        if (hud == null)
+            return;
+        hud.SetItemKeyHints(visible, line0, line1);
+    }
 }

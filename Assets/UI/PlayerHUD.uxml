@@ -1,7 +1,7 @@
 <ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/PlayerHUD.uss?fileID=7433441132597879392&amp;guid=be272f64e986c714eada5182bceca713&amp;type=3#PlayerHUD"/>
     <ui:VisualElement name="cameraHintRow" class="cameraHintRow">
-        <ui:Label name="cameraHintLabel" text="Press C — camera" class="cameraHintText" />
+        <ui:Label name="cameraHintLabel" text="C - Camera" class="cameraHintText" />
     </ui:VisualElement>
     <ui:VisualElement name="hudBars">
         <ui:Label name="healthLabel" text="Health" class="barTitle" />
@@ -13,10 +13,15 @@
             <ui:VisualElement name="staminaFill" />
         </ui:VisualElement>
     </ui:VisualElement>
-    <ui:VisualElement name="hotbarRoot">
+    <ui:VisualElement name="hotbarPanel" class="hotbarPanel">
+        <ui:VisualElement name="itemKeyHintsRow" class="itemKeyHintsRow">
+            <ui:Label name="itemKeyHintLine0" text="" class="itemKeyHintLabel" />
+            <ui:Label name="itemKeyHintLine1" text="" class="itemKeyHintLabel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="hotbarRoot">
         <ui:VisualElement name="hotbarSlot0Column" class="hotbarSlotColumn">
             <ui:VisualElement name="hotbarSlot0" class="hotbarSlot">
-                <ui:Label name="hotbarSlot0Item" text="camera" class="hotbarItemLabel" />
+                <ui:Label name="hotbarSlot0Item" text="Camera" class="hotbarItemLabel" />
             </ui:VisualElement>
             <ui:Label name="hotbarSlot0Key" text="C" class="hotbarKeyLabel" />
         </ui:VisualElement>
@@ -43,6 +48,7 @@
                 <ui:Label name="hotbarSlot4Item" text="" class="hotbarItemLabel" />
             </ui:VisualElement>
             <ui:Label name="hotbarSlot4Key" text="4" class="hotbarKeyLabel" />
+        </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

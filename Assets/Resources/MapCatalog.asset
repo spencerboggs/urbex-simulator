@@ -17,3 +17,5 @@ MonoBehaviour:
     displayName: TestBunker
   - sceneName: TestWorld
     displayName: TestWorld
+  - sceneName: TestWorldOld
+    displayName: TestWorldOld

@@ -139,17 +139,14 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (!IsLocalControllingPlayer())
             return;
 
+        if (KeybindManager.WasPressedThisFrame(KeybindAction.Drop))
+            DropSelectedItem();
+
         Keyboard kb = Keyboard.current;
         if (kb == null)
             return;
 
         HandleSelectionInput(kb);
-
-        // Drop key is migrated to the configurable keybind system. Pickup (E) and
-        // all other interactions are now handled by PlayerInteractor on the same
-        // GameObject - see Player/PlayerInteractor.cs
-        if (KeybindManager.WasPressedThisFrame(KeybindAction.Drop))
-            DropSelectedItem();
     }
 
     public void RefreshHudState()
@@ -261,6 +258,39 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             _slotItemLabels[i] = InventoryItemCatalog.GetDisplayName(_slotItems[i]);
 
         _hudController.SetHotbarState(AvailableSlots, _selectedSlotIndex, _slotItemLabels, SlotKeyLabels);
+        PublishItemKeyHints();
+    }
+
+    private void PublishItemKeyHints()
+    {
+        if (_hudController == null || !ShouldPublishHud())
+            return;
+
+        InventoryItemType selectedItem = GetSelectedItem();
+        if (_selectedSlotIndex < 0 || selectedItem == InventoryItemType.None)
+        {
+            _hudController.SetItemKeyHints(false, string.Empty);
+            return;
+        }
+
+        string primaryLine = null;
+        if (InventoryItemCatalog.SupportsPrimaryUse(selectedItem))
+        {
+            primaryLine = KeybindManager.FormatHint(
+                KeybindAction.ItemPrimaryUse,
+                InventoryItemCatalog.GetPrimaryUseDescription(selectedItem));
+        }
+
+        string dropLine = null;
+        if (InventoryItemCatalog.CanDrop(selectedItem))
+        {
+            dropLine = KeybindManager.FormatHint(
+                KeybindAction.Drop,
+                $"Drop {InventoryItemCatalog.GetDisplayName(selectedItem)}");
+        }
+
+        bool visible = !string.IsNullOrEmpty(primaryLine) || !string.IsNullOrEmpty(dropLine);
+        _hudController.SetItemKeyHints(visible, primaryLine, dropLine);
     }
 
     private InventoryItemType GetSelectedItem()
@@ -397,25 +427,6 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             ServerTryPickupWorldItem(worldItem.NetworkItemId);
         else
             RpcRequestPickupWorldItem(worldItem.NetworkItemId);
-    }
-
-    // Produces the "Q drop Flashlight" hint when nothing more important (an
-    // interactable / world item) is in front of the player. PlayerInteractor calls
-    // this as the lowest-priority HUD prompt source.
-    public bool TryGetDropPrompt(out string prompt)
-    {
-        prompt = string.Empty;
-
-        if (!ShouldPublishHud())
-            return false;
-
-        InventoryItemType selectedItem = GetSelectedItem();
-        if (_selectedSlotIndex <= 0 || !InventoryItemCatalog.CanDrop(selectedItem))
-            return false;
-
-        string dropKey = KeybindManager.GetDisplayName(KeybindAction.Drop);
-        prompt = $"{dropKey} drop {InventoryItemCatalog.GetDisplayName(selectedItem)}";
-        return true;
     }
 
     private void ApplyInventoryState(

@@ -5,24 +5,8 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 
 // Runtime entry point for keybind queries. Looks up the configured Key for an
-// action, polls Keyboard.current, and exposes human-readable display strings for
-// HUD prompts
-//
-// Lifecycle:
-//   - Lazy: the first call to any public method loads keybinds.json (or writes the
-//     defaults if the file is missing). All subsequent calls use the in-memory copy
-//   - Defaults live in code (KeybindConfig field initializers), so a deleted /
-//     corrupt JSON file never bricks input - we silently fall back to defaults and
-//     log a warning
-//
-// File location:
-//   Application.persistentDataPath/keybinds.json
-//   Windows: %LocalAppData%Low\<company>\<product>\keybinds.json
-//   macOS:   ~/Library/Application Support/<company>/<product>/keybinds.json
-//   Linux:   ~/.config/unity3d/<company>/<product>/keybinds.json
-//
-// The file is plain JSON - users can edit it with any text editor or via a future
-// in-game settings UI (which should call ApplyConfig + Save)
+// action, polls Keyboard.current / Mouse.current, and exposes human-readable
+// display strings for HUD prompts
 public static class KeybindManager
 {
     public const string KeybindsFileName = "keybinds.json";
@@ -30,8 +14,6 @@ public static class KeybindManager
     private static KeybindConfig _config;
     private static bool _initialized;
 
-    // Read-only snapshot of the currently active config. Don't mutate the returned
-    // instance directly - call ApplyConfig instead so the JSON stays in sync
     public static KeybindConfig Current
     {
         get
@@ -44,12 +26,9 @@ public static class KeybindManager
     public static string KeybindsFilePath =>
         Path.Combine(Application.persistentDataPath, KeybindsFileName);
 
-    // True if the underlying input subsystem can actually be queried this frame
-    // Editor scripts and tests may call query methods before Keyboard.current exists
-    public static bool IsAvailable => Keyboard.current != null;
+    public static bool IsAvailable =>
+        Keyboard.current != null || Mouse.current != null;
 
-    // Replace the active config and write it to disk. Use this from a future
-    // settings UI to persist user changes
     public static void ApplyConfig(KeybindConfig newConfig)
     {
         if (newConfig == null)
@@ -60,7 +39,6 @@ public static class KeybindManager
         Save();
     }
 
-    // Reset everything to compiled defaults and overwrite the JSON file
     public static void ResetToDefaults()
     {
         _config = new KeybindConfig();
@@ -68,36 +46,49 @@ public static class KeybindManager
         Save();
     }
 
-    // True if the configured key for `action` transitioned to pressed this frame
-    // Returns false (without throwing) when no keyboard device is connected
     public static bool WasPressedThisFrame(KeybindAction action)
     {
+        if (TryGetMouseButtonControl(action, out ButtonControl mouseButton))
+            return mouseButton.wasPressedThisFrame;
+
         KeyControl key = GetKeyControl(action);
         return key != null && key.wasPressedThisFrame;
     }
 
-    // True if the configured key for `action` transitioned to released this frame
     public static bool WasReleasedThisFrame(KeybindAction action)
     {
+        if (TryGetMouseButtonControl(action, out ButtonControl mouseButton))
+            return mouseButton.wasReleasedThisFrame;
+
         KeyControl key = GetKeyControl(action);
         return key != null && key.wasReleasedThisFrame;
     }
 
-    // True while the configured key for `action` is held down
     public static bool IsPressed(KeybindAction action)
     {
+        if (TryGetMouseButtonControl(action, out ButtonControl mouseButton))
+            return mouseButton.isPressed;
+
         KeyControl key = GetKeyControl(action);
         return key != null && key.isPressed;
     }
 
-    // Short human-readable label for the configured key ("E", "Shift", "1", ...)
-    // Uses the Input System's runtime displayName when available so it adapts to
-    // keyboard layouts (e.g. "Z" -> "W" on AZERTY for the W bind).
+    // HUD format: "E - Pick up Flashlight"
+    public static string FormatHint(KeybindAction action, string description)
+    {
+        if (string.IsNullOrEmpty(description))
+            return GetDisplayName(action);
+        return $"{GetDisplayName(action)} - {description}";
+    }
+
     public static string GetDisplayName(KeybindAction action)
     {
         EnsureInitialized();
 
         string raw = GetRawKeyName(action);
+        if (TryGetMouseDisplayName(raw, out string mouseLabel))
+            return mouseLabel;
+
         if (Keyboard.current != null && TryParseKey(raw, out Key key))
         {
             KeyControl control = Keyboard.current[key];
@@ -105,11 +96,9 @@ public static class KeybindManager
                 return control.displayName;
         }
 
-        return FormatFallback(raw);
+        return FormatKeyboardFallback(raw);
     }
 
-    // Underlying key string from the active config (e.g. "E", "Digit1"). Useful for
-    // settings UIs that want to show the raw bound key
     public static string GetRawKeyName(KeybindAction action)
     {
         EnsureInitialized();
@@ -118,6 +107,7 @@ public static class KeybindManager
         {
             KeybindAction.Interact => _config.Interact,
             KeybindAction.Drop => _config.Drop,
+            KeybindAction.ItemPrimaryUse => _config.ItemPrimaryUse,
             KeybindAction.Jump => _config.Jump,
             KeybindAction.Sprint => _config.Sprint,
             KeybindAction.Crouch => _config.Crouch,
@@ -134,15 +124,63 @@ public static class KeybindManager
         };
     }
 
+    private static bool TryGetMouseButtonControl(KeybindAction action, out ButtonControl button)
+    {
+        button = null;
+        string raw = GetRawKeyName(action);
+        if (!IsMouseButtonName(raw))
+            return false;
+
+        Mouse mouse = Mouse.current;
+        if (mouse == null)
+            return false;
+
+        button = raw.ToLowerInvariant() switch
+        {
+            "leftbutton" => mouse.leftButton,
+            "rightbutton" => mouse.rightButton,
+            "middlebutton" => mouse.middleButton,
+            _ => null,
+        };
+        return button != null;
+    }
+
+    private static bool IsMouseButtonName(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+        string lower = raw.Trim().ToLowerInvariant();
+        return lower is "leftbutton" or "rightbutton" or "middlebutton";
+    }
+
+    private static bool TryGetMouseDisplayName(string raw, out string label)
+    {
+        label = null;
+        if (!IsMouseButtonName(raw))
+            return false;
+
+        label = raw.Trim().ToLowerInvariant() switch
+        {
+            "leftbutton" => "LMB",
+            "rightbutton" => "RMB",
+            "middlebutton" => "MMB",
+            _ => raw,
+        };
+        return true;
+    }
+
     private static KeyControl GetKeyControl(KeybindAction action)
     {
         EnsureInitialized();
+
+        string raw = GetRawKeyName(action);
+        if (IsMouseButtonName(raw))
+            return null;
 
         Keyboard kb = Keyboard.current;
         if (kb == null)
             return null;
 
-        string raw = GetRawKeyName(action);
         if (!TryParseKey(raw, out Key key))
             return null;
 
@@ -156,18 +194,13 @@ public static class KeybindManager
         if (string.IsNullOrWhiteSpace(raw))
             return false;
 
-        // Accept bare digits ("1") as a friendlier shorthand for "Digit1"
         if (raw.Length == 1 && raw[0] >= '0' && raw[0] <= '9')
-        {
             return Enum.TryParse("Digit" + raw, ignoreCase: true, out key);
-        }
 
         return Enum.TryParse(raw, ignoreCase: true, out key) && key != Key.None;
     }
 
-    // Cheap user-facing fallback when the Input System has no displayName for a key
-    // (e.g. running in batch mode). "Digit1" -> "1", "LeftShift" -> "Left Shift"
-    private static string FormatFallback(string raw)
+    private static string FormatKeyboardFallback(string raw)
     {
         if (string.IsNullOrEmpty(raw))
             return "?";
@@ -175,7 +208,6 @@ public static class KeybindManager
         if (raw.StartsWith("Digit", StringComparison.OrdinalIgnoreCase) && raw.Length == 6)
             return raw.Substring(5);
 
-        // Insert spaces before capitals after the first character: "LeftShift" -> "Left Shift"
         if (raw.Length > 1)
         {
             System.Text.StringBuilder sb = new System.Text.StringBuilder(raw.Length + 4);
@@ -198,7 +230,6 @@ public static class KeybindManager
         if (_initialized)
             return;
 
-        // Set defaults first so a load failure still leaves the manager usable.
         _config = new KeybindConfig();
         _initialized = true;
 
@@ -212,11 +243,15 @@ public static class KeybindManager
                 if (loaded != null)
                 {
                     _config = loaded;
-                    // If the on-disk version is older, rewrite with the defaults
-                    // merged in for any new fields. JsonUtility already populated
-                    // missing fields with the compiled defaults
-                    if (loaded.Version != new KeybindConfig().Version)
+                    if (loaded.Version < new KeybindConfig().Version)
+                    {
+                        KeybindConfig defaults = new KeybindConfig();
+                        if (string.IsNullOrEmpty(loaded.ItemPrimaryUse))
+                            loaded.ItemPrimaryUse = defaults.ItemPrimaryUse;
+                        loaded.Version = defaults.Version;
+                        _config = loaded;
                         Save();
+                    }
                 }
                 else
                 {
@@ -227,7 +262,6 @@ public static class KeybindManager
             }
             else
             {
-                // First run - write defaults so the user can find and edit the file
                 Save();
             }
         }

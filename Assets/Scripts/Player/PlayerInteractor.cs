@@ -138,12 +138,20 @@ public sealed class PlayerInteractor : MonoBehaviour
 
         if (_focusedItem != null)
         {
-            string key = KeybindManager.GetDisplayName(KeybindAction.Interact);
+            string itemName = InventoryItemCatalog.GetDisplayName(_focusedItem.ItemType);
+            if (string.IsNullOrEmpty(itemName))
+                itemName = _focusedItem.DisplayName;
 
             if (_inventory.CanPickup(_focusedItem.ItemType))
-                _hud.SetContextHint(true, $"Press {key} to pick up {_focusedItem.DisplayName}");
+            {
+                _hud.SetContextHint(
+                    true,
+                    KeybindManager.FormatHint(KeybindAction.Interact, $"Pick up {itemName}"));
+            }
             else
-                _hud.SetContextHint(true, $"No empty slot for {_focusedItem.DisplayName}");
+            {
+                _hud.SetContextHint(true, $"No empty slot for {itemName}");
+            }
 
             return;
         }
@@ -153,16 +161,11 @@ public sealed class PlayerInteractor : MonoBehaviour
             string prompt = _focusedInteractable.GetInteractionPrompt();
             if (!string.IsNullOrEmpty(prompt))
             {
-                string key = KeybindManager.GetDisplayName(KeybindAction.Interact);
-                _hud.SetContextHint(true, $"Press {key} to {prompt.ToLowerInvariant()}");
+                _hud.SetContextHint(
+                    true,
+                    KeybindManager.FormatHint(KeybindAction.Interact, prompt));
                 return;
             }
-        }
-
-        if (_inventory.TryGetDropPrompt(out string dropPrompt))
-        {
-            _hud.SetContextHint(true, dropPrompt);
-            return;
         }
 
         _hud.SetContextHint(false, string.Empty);

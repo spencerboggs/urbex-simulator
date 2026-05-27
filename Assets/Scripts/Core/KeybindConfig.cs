@@ -18,13 +18,17 @@ using System;
 public class KeybindConfig
 {
     // Bump if the JSON layout changes in a breaking way
-    public int Version = 1;
+    public int Version = 2;
 
     // [active] Pick up world items, open doors, and other context-sensitive interactions
     public string Interact = "E";
 
     // [active] Drop the currently selected inventory item
     public string Drop = "Q";
+
+    // [active] Primary action for the equipped item (flashlight toggle, spray paint, etc.)
+    // Uses mouse button names from the Input System: LeftButton, RightButton, MiddleButton
+    public string ItemPrimaryUse = "LeftButton";
 
     // Reserved - PlayerMovement still polls these directly
     public string Jump = "Space";
@@ -51,6 +55,7 @@ public enum KeybindAction
 {
     Interact,
     Drop,
+    ItemPrimaryUse,
     Jump,
     Sprint,
     Crouch,

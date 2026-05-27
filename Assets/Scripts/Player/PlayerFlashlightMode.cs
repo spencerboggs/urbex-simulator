@@ -34,12 +34,17 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
     private GameObject _anchor;
     private Light _spotLight;
     private bool _equipped;
+    private bool _isOn;
+
+    public bool IsEquipped => _equipped;
+    public bool IsOn => _isOn;
 
     private void Awake()
     {
         _gameplayCamera = GetComponentInChildren<Camera>(true);
+        _isOn = false;
         EnsureAnchor();
-        RefreshVisibility();
+        RefreshPresentation();
     }
 
     private void OnDisable()
@@ -48,11 +53,37 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
             _anchor.SetActive(false);
     }
 
+    private void Update()
+    {
+        if (!_equipped || !isActiveAndEnabled)
+            return;
+
+        if (!KeybindManager.WasPressedThisFrame(KeybindAction.ItemPrimaryUse))
+            return;
+
+        Toggle();
+    }
+
     public void SetEquipped(bool equipped)
     {
         _equipped = equipped;
         EnsureAnchor();
-        RefreshVisibility();
+        RefreshPresentation();
+    }
+
+    public void Toggle()
+    {
+        if (!_equipped)
+            return;
+
+        _isOn = !_isOn;
+        RefreshPresentation();
+    }
+
+    public void SetOn(bool on)
+    {
+        _isOn = on;
+        RefreshPresentation();
     }
 
     private void EnsureAnchor()
@@ -91,11 +122,15 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         }
     }
 
-    private void RefreshVisibility()
+    private void RefreshPresentation()
     {
         if (_anchor == null)
             return;
 
-        _anchor.SetActive(_equipped && isActiveAndEnabled);
+        bool showHeld = _equipped && isActiveAndEnabled;
+        _anchor.SetActive(showHeld);
+
+        if (_spotLight != null)
+            _spotLight.enabled = showHeld && _isOn;
     }
 }

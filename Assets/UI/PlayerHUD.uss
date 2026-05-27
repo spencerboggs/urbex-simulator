@@ -26,18 +26,48 @@
 
 #hudBars {
     position: absolute;
-    bottom: 40px;
-    left: 70px;
+    left: 52px;
+    /* Bottom of stamina bar aligns with bottom of hotbar slots (not key labels):
+       panel bottom 40px + key row (8 margin + 4+16+4 padding/font) ≈ 72px */
+    bottom: 60px;
     width: 400px;
     flex-direction: column;
 }
 
-#hotbarRoot {
+.hotbarPanel {
     position: absolute;
     right: 36px;
     bottom: 40px;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.itemKeyHintsRow {
+    flex-direction: column;
+    align-items: flex-end;
+    margin-bottom: 10px;
+}
+
+.itemKeyHintLabel {
+    font-size: 13px;
+    color: rgb(245, 245, 250);
+    -unity-font-style: bold;
+    letter-spacing: 0.3px;
+    -unity-text-align: middle-right;
+    background-color: rgba(12, 12, 16, 0.88);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+}
+
+#hotbarRoot {
     flex-direction: row;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: flex-start;
 }
 
