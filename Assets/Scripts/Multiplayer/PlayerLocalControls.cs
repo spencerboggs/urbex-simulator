@@ -58,10 +58,11 @@ public sealed class PlayerLocalControls : NetworkBehaviour
 
     private bool IsStagingOrMenuScene()
     {
-        // When the active scene is the match
-        // Never treat as lobby or menu
+        // When the active scene is any gameplay map (not lobby / main menu),
+        // we're in-match - controls should be enabled. This used to hard-code
+        // "World" but the lobby can now load any map listed in the MapCatalog
         string active = UnitySceneManager.GetActiveScene().name;
-        if (active == NetworkSceneFlow.World)
+        if (NetworkSceneFlow.IsGameplayScene(active))
             return false;
 
         string objectScene = gameObject.scene.name;

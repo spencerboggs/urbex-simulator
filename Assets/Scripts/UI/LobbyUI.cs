@@ -5,10 +5,14 @@ using UnityEngine.UI;
 
 
 // Lobby staging UI: player count (up to 8), map selection, host-only start match, leave session
+//
+// Map data comes from MapCatalog (auto-synced from Assets/Scenes/Gameplay/ by
+// Editor/MapCatalogAutoSync.cs). The host's "Next Map" click is routed through
+// NetworkSessionController.RequestMapChange so the server can validate and
+// replicate the change to every connected client. Non-host clients have the
+// button disabled and only observe the host's selection via broadcast
 public sealed class LobbyUI : MonoBehaviour
 {
-    private static readonly string[] DefaultMapLabels = { "Level (default)", "Future map B" };
-
     [SerializeField]
     private NetworkSessionController _session;
 
@@ -31,8 +35,10 @@ public sealed class LobbyUI : MonoBehaviour
     [Tooltip("If no labels are assigned, a default Canvas is generated at runtime.")]
     private bool _generateDefaultUiIfEmpty = true;
 
+    private MapCatalog _catalog;
     private bool _wired;
     private float _ignoreStartMatchClicksUntil;
+    private bool _subscribedToSession;
 
     private void Awake()
     {
@@ -48,17 +54,29 @@ public sealed class LobbyUI : MonoBehaviour
         if (_session == null)
             _session = FindAnyObjectByType<NetworkSessionController>();
 
+        _catalog = MapCatalog.Load();
+        if (_catalog == null || _catalog.Count == 0)
+        {
+            Debug.LogWarning("[LobbyUI] MapCatalog is missing or empty. Add scenes to Assets/Scenes/Gameplay/ and run Tools/Urbex/Refresh Map Catalog.");
+        }
+
         WireListenersOnce();
     }
 
     private void OnEnable()
     {
+        SubscribeToSession();
         RefreshMapLabel();
         // On scene load, InputSystemUIInputModule can dispatch an initial Submit
         // If a button is selected, that Submit can invoke onClick. Debounce and clear selection
         _ignoreStartMatchClicksUntil = Time.unscaledTime + 0.25f;
         if (EventSystem.current != null)
             EventSystem.current.SetSelectedGameObject(null);
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeFromSession();
     }
 
     private void Update()
@@ -95,25 +113,73 @@ public sealed class LobbyUI : MonoBehaviour
             _mapNextButton.onClick.AddListener(OnMapNextClicked);
     }
 
-    private void RefreshMapLabel()
+    private void SubscribeToSession()
     {
-        if (_mapLabel == null || _session == null)
+        if (_session == null)
+            _session = FindAnyObjectByType<NetworkSessionController>();
+        if (_session == null || _subscribedToSession)
             return;
 
-        // Clamp the selected map index to valid bounds and update the label text accordingly
-        int idx = Mathf.Clamp(_session.SelectedMapIndex, 0, DefaultMapLabels.Length - 1);
-        _session.SelectedMapIndex = idx;
-        _mapLabel.text = $"Map: {DefaultMapLabels[idx]}";
+        _session.OnSelectedMapChanged += OnSelectedMapChanged;
+        _subscribedToSession = true;
+    }
+
+    private void UnsubscribeFromSession()
+    {
+        if (_session == null || !_subscribedToSession)
+            return;
+
+        _session.OnSelectedMapChanged -= OnSelectedMapChanged;
+        _subscribedToSession = false;
+    }
+
+    private void OnSelectedMapChanged(string sceneName)
+    {
+        RefreshMapLabel();
+    }
+
+    private void RefreshMapLabel()
+    {
+        if (_mapLabel == null)
+            return;
+
+        if (_catalog == null || _catalog.Count == 0)
+        {
+            _mapLabel.text = "Map: (no maps available)";
+            return;
+        }
+
+        string sceneName = _session != null ? _session.SelectedMapSceneName : string.Empty;
+
+        // Fall back to the first catalog entry for display purposes only - this
+        // doesn't change the session's selection, just keeps the UI from
+        // showing a blank value before the host has picked anything
+        if (string.IsNullOrEmpty(sceneName) && _catalog.TryGetByIndex(0, out MapCatalog.MapEntry first))
+            sceneName = first.sceneName;
+
+        if (_catalog.TryGetBySceneName(sceneName, out MapCatalog.MapEntry entry, out _))
+            _mapLabel.text = $"Map: {entry.displayName}";
+        else
+            _mapLabel.text = $"Map: {sceneName}";
     }
 
     private void OnMapNextClicked()
     {
-        if (_session == null)
+        if (_session == null || _catalog == null || _catalog.Count == 0)
             return;
 
-        // Cycle through available maps by incrementing the selected index and wrapping around using modulo
-        _session.SelectedMapIndex = (_session.SelectedMapIndex + 1) % DefaultMapLabels.Length;
-        RefreshMapLabel();
+        // Non-host clients shouldn't get here (UI gates it), but guard anyway.
+        if (!IsHost())
+            return;
+
+        string currentScene = _session.SelectedMapSceneName;
+        int currentIndex = -1;
+        if (!string.IsNullOrEmpty(currentScene))
+            _catalog.TryGetBySceneName(currentScene, out _, out currentIndex);
+
+        int nextIndex = (currentIndex + 1) % _catalog.Count;
+        if (_catalog.TryGetByIndex(nextIndex, out MapCatalog.MapEntry nextEntry))
+            _session.RequestMapChange(nextEntry.sceneName);
     }
 
     private void UpdatePlayerCount()
@@ -136,17 +202,27 @@ public sealed class LobbyUI : MonoBehaviour
 
     private void UpdateHostButtons()
     {
-        if (_startMatchButton == null)
-            return;
+        bool host = IsHost();
 
-        // Only enable the Start Match button for the host, since progression is host-driven in this implementation
+        // Only the host can start the match; the lobby is host-driven
+        if (_startMatchButton != null)
+            _startMatchButton.interactable = host;
+
+        // Only the host can cycle maps, and only when there's more than one
+        // choice. Non-host clients see the label update via the broadcast but
+        // cannot change the selection themselves
+        if (_mapNextButton != null)
+            _mapNextButton.interactable = host && _catalog != null && _catalog.Count > 1;
+    }
+
+    private static bool IsHost()
+    {
         NetworkManager nm = FindAnyObjectByType<NetworkManager>();
-        bool host = nm != null && nm.IsHostStarted;
-        _startMatchButton.interactable = host;
+        return nm != null && nm.IsHostStarted;
     }
 
     private void OnStartMatchClicked()
-    {   
+    {
         // In this simple implementation, the host can start the match once ready, which triggers a global scene load for all clients
         if (Time.unscaledTime < _ignoreStartMatchClicksUntil)
             return;

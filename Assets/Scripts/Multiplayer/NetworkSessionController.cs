@@ -75,6 +75,8 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (_networkManager != null && _gameplayPlayerPrefab != null &&
             _networkManager.TryGetComponent(out PlayerSpawner spawner))
             spawner.SetPlayerPrefab(_gameplayPlayerPrefab);
+
+        EnsureDefaultMapSelection();
     }
 
     private void OnEnable()
@@ -84,6 +86,14 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         _networkManager.ClientManager.OnClientConnectionState += OnClientConnectionState;
         _networkManager.SceneManager.OnLoadEnd += OnFishNetSceneLoadEnd;
+
+        // Lobby map selection sync. Broadcasts work without a NetworkBehaviour, so
+        // we can register these regardless of whether server/client is started yet
+        // - FishNet routes them once a connection comes up. Server is the source
+        // of truth for the selection; clients only listen
+        _networkManager.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+        _networkManager.ServerManager.RegisterBroadcast<RequestMapSelectionBroadcast>(OnServerReceivedMapRequest);
+        _networkManager.ClientManager.RegisterBroadcast<MapSelectionBroadcast>(OnClientReceivedMapSelection);
     }
 
     private void OnDisable()
@@ -93,14 +103,27 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         _networkManager.ClientManager.OnClientConnectionState -= OnClientConnectionState;
         _networkManager.SceneManager.OnLoadEnd -= OnFishNetSceneLoadEnd;
+
+        _networkManager.ServerManager.OnRemoteConnectionState -= OnRemoteConnectionState;
+        _networkManager.ServerManager.UnregisterBroadcast<RequestMapSelectionBroadcast>(OnServerReceivedMapRequest);
+        _networkManager.ClientManager.UnregisterBroadcast<MapSelectionBroadcast>(OnClientReceivedMapSelection);
     }
 
-    // Selected map / level index from the lobby UI
-    // Gameplay systems can read this when loading the match
-    public int SelectedMapIndex { get; set; }
+    // Currently selected gameplay map (the scene name without .unity, matching
+    // MapCatalog entries). Authoritative on the server; replicated to clients via
+    // MapSelectionBroadcast. Stored even outside of the lobby so the host can pick
+    // a map in the main menu flow in the future if desired
+    private string _selectedMapSceneName = string.Empty;
+
+    public string SelectedMapSceneName => _selectedMapSceneName;
+
+    // Fired whenever _selectedMapSceneName changes (both on the host after a host
+    // change, and on remote clients when the server pushes an update). LobbyUI
+    // subscribes to refresh its label without polling
+    public event Action<string> OnSelectedMapChanged;
 
     // Last join value synced with the main menu join field. With FishySteamworks this is the host's
-    // Steam ID (steamId64). For non-Steam transports (local dev) this may be a hostname, IP, or host:port.
+    // Steam ID (steamId64). For non-Steam transports (local dev) this may be a hostname, IP, or host:port
     public string DefaultJoinTarget { get; set; } = string.Empty;
 
     // Apply transport limits so the lobby capacity matches FishNet server settings
@@ -222,13 +245,167 @@ public sealed class NetworkSessionController : MonoBehaviour
             UnitySceneManager.LoadScene(NetworkSceneFlow.MainMenu);
     }
 
-    // Server-authoritative transition from lobby to gameplay (call from host UI only)
+    // Server-authoritative transition from lobby to gameplay (call from host UI only).
+    // Loads whichever map the lobby has currently selected. Falls back to the
+    // catalog's first entry, then NetworkSceneFlow.DefaultMap, so a misconfigured
+    // catalog can't soft-lock the host
     public void StartMatchFromLobby()
     {
         if (_networkManager == null || !_networkManager.IsHostStarted)
             return;
 
-        NetworkSceneFlow.LoadWorld(_networkManager, _gameplayPlayerPrefab);
+        string sceneName = ResolveStartMatchSceneName();
+        if (string.IsNullOrEmpty(sceneName))
+        {
+            Debug.LogWarning("[Net] StartMatchFromLobby: no map selected and MapCatalog is empty. Aborting.");
+            return;
+        }
+
+        NetworkSceneFlow.LoadMap(_networkManager, sceneName, _gameplayPlayerPrefab);
+    }
+
+    private string ResolveStartMatchSceneName()
+    {
+        if (!string.IsNullOrEmpty(_selectedMapSceneName))
+            return _selectedMapSceneName;
+
+        MapCatalog catalog = MapCatalog.Load();
+        if (catalog != null && catalog.Count > 0 && catalog.TryGetByIndex(0, out MapCatalog.MapEntry entry))
+            return entry.sceneName;
+
+        return NetworkSceneFlow.DefaultMap;
+    }
+
+    // Host-side entry point invoked by LobbyUI when the user clicks "Next Map".
+    // Validates the requested scene against MapCatalog, applies it locally, and
+    // broadcasts the new selection to every connected client. Non-host clients
+    // should never reach this method (UI gates the button), but if they do we
+    // round-trip the request through the server via RequestMapSelectionBroadcast
+    // so the host stays authoritative
+    public void RequestMapChange(string sceneName)
+    {
+        if (string.IsNullOrEmpty(sceneName) || _networkManager == null)
+            return;
+
+        if (_networkManager.IsServerStarted)
+        {
+            if (!IsValidMapForSelection(sceneName))
+            {
+                Debug.LogWarning($"[Net] RequestMapChange: '{sceneName}' is not in the MapCatalog. Ignoring.");
+                return;
+            }
+
+            ApplyMapSelectionLocally(sceneName);
+            BroadcastMapSelectionToAll(sceneName);
+            return;
+        }
+
+        // Non-host client (defensive path). Ask the server to make the change
+        if (_networkManager.ClientManager.Started)
+        {
+            _networkManager.ClientManager.Broadcast(new RequestMapSelectionBroadcast { SceneName = sceneName });
+        }
+    }
+
+    private void EnsureDefaultMapSelection()
+    {
+        if (!string.IsNullOrEmpty(_selectedMapSceneName))
+            return;
+
+        MapCatalog catalog = MapCatalog.Load();
+        if (catalog == null || catalog.Count == 0)
+            return;
+
+        if (catalog.TryGetByIndex(0, out MapCatalog.MapEntry entry))
+            _selectedMapSceneName = entry.sceneName;
+    }
+
+    private bool IsValidMapForSelection(string sceneName)
+    {
+        if (string.IsNullOrEmpty(sceneName))
+            return false;
+
+        MapCatalog catalog = MapCatalog.Load();
+        if (catalog == null || catalog.Count == 0)
+        {
+            // No catalog yet - accept the default map as a fallback so single-map
+            // setups still work before the auto-sync has ever run
+            return sceneName == NetworkSceneFlow.DefaultMap;
+        }
+
+        return catalog.TryGetBySceneName(sceneName, out _, out _);
+    }
+
+    private void ApplyMapSelectionLocally(string sceneName)
+    {
+        if (_selectedMapSceneName == sceneName)
+            return;
+
+        _selectedMapSceneName = sceneName;
+        OnSelectedMapChanged?.Invoke(_selectedMapSceneName);
+    }
+
+    private void BroadcastMapSelectionToAll(string sceneName)
+    {
+        if (_networkManager == null || !_networkManager.IsServerStarted)
+            return;
+
+        _networkManager.ServerManager.Broadcast(new MapSelectionBroadcast { SceneName = sceneName });
+    }
+
+    // Server-side handler for a client-originated map change request. Authority
+    // is enforced here: only the host's local connection may change the map
+    private void OnServerReceivedMapRequest(NetworkConnection sender, RequestMapSelectionBroadcast bc, Channel channel)
+    {
+        if (sender == null)
+            return;
+
+        // Only the host (the local client running on the server machine) is
+        // allowed to change the map. Everyone else is ignored - UI shouldn't
+        // even surface the button, but we defend against malformed clients
+        if (!sender.IsLocalClient)
+        {
+            Debug.LogWarning($"[Net] Ignoring map change request from non-host connection {sender.ClientId}.");
+            return;
+        }
+
+        if (!IsValidMapForSelection(bc.SceneName))
+        {
+            Debug.LogWarning($"[Net] Host requested unknown map '{bc.SceneName}'. Ignoring.");
+            return;
+        }
+
+        ApplyMapSelectionLocally(bc.SceneName);
+        BroadcastMapSelectionToAll(bc.SceneName);
+    }
+
+    private void OnClientReceivedMapSelection(MapSelectionBroadcast bc, Channel channel)
+    {
+        if (string.IsNullOrEmpty(bc.SceneName))
+            return;
+
+        // In host mode, the server-side ApplyMapSelectionLocally already updated
+        // the value before broadcasting, so this is a no-op (the equality check
+        // inside ApplyMapSelectionLocally suppresses the redundant event). For
+        // remote clients this is the only place the value updates
+        ApplyMapSelectionLocally(bc.SceneName);
+    }
+
+    // When a new remote client connects, push the current map selection to that
+    // specific connection so late-joiners see the same value as everyone else
+    // without having to ask. Runs server-side only
+    private void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+    {
+        if (conn == null || args.ConnectionState != RemoteConnectionState.Started)
+            return;
+
+        if (_networkManager == null || !_networkManager.IsServerStarted)
+            return;
+
+        if (string.IsNullOrEmpty(_selectedMapSceneName))
+            return;
+
+        _networkManager.ServerManager.Broadcast(conn, new MapSelectionBroadcast { SceneName = _selectedMapSceneName });
     }
 
     private void OnClientConnectionState(ClientConnectionStateArgs args)
@@ -399,7 +576,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             return;
 
         bool loadedLobby = false;
-        bool loadedWorld = false;
+        bool loadedGameplay = false;
         for (int i = 0; i < args.LoadedScenes.Length; i++)
         {
             Scene s = args.LoadedScenes[i];
@@ -408,27 +585,27 @@ public sealed class NetworkSessionController : MonoBehaviour
 
             if (s.name == NetworkSceneFlow.Lobby)
                 loadedLobby = true;
-            else if (s.name == NetworkSceneFlow.World)
-                loadedWorld = true;
+            else if (s.name != NetworkSceneFlow.MainMenu && NetworkSceneFlow.IsGameplayScene(s.name))
+                loadedGameplay = true;
         }
 
         // FishNet global scene loading doesn't necessarily unload any locally-loaded "offline" scene UI
-        // Ensure MainMenu UI is removed once we transition into Lobby/World on both host and clients
-        if (loadedLobby || loadedWorld)
+        // Ensure MainMenu UI is removed once we transition into Lobby/Gameplay on both host and clients
+        if (loadedLobby || loadedGameplay)
             DestroyMainMenuUiIfPresent();
 
         // Ensure Lobby UI is removed once we enter gameplay
         // If scenes are loaded globally/additively, the lobby canvas can otherwise persist
-        if (loadedWorld)
+        if (loadedGameplay)
             DestroyLobbyUiIfPresent();
 
         if (loadedLobby)
             PhotoRollSession.ResetForLobby();
 
-        if (loadedWorld && _networkManager.IsServerStarted)
+        if (loadedGameplay && _networkManager.IsServerStarted)
             PhotoRollSession.EnsureServerMatchId();
 
-        if (!loadedWorld)
+        if (!loadedGameplay)
             return;
 
         // Spawning is server-authoritative
