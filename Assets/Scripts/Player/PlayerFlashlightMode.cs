@@ -33,6 +33,7 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
     private Camera _gameplayCamera;
     private GameObject _anchor;
     private Light _spotLight;
+    private Transform _heldVisualRoot;
     private bool _equipped;
     private bool _isOn;
 
@@ -101,11 +102,9 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
             _spotLight = _anchor.AddComponent<Light>();
             _spotLight.type = LightType.Spot;
             _spotLight.shadows = LightShadows.None;
-
-            Transform visual = FlashlightVisualFactory.EnsurePlaceholderVisual(_anchor.transform);
-            if (visual != null)
-                visual.localScale = new Vector3(0.9f, 0.9f, 0.9f);
         }
+
+        EnsureHeldVisual();
 
         Transform anchorTransform = _anchor.transform;
         anchorTransform.localPosition = _localPosition;
@@ -119,6 +118,62 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
             _spotLight.intensity = _lightIntensity;
             _spotLight.spotAngle = _spotAngle;
             _spotLight.innerSpotAngle = Mathf.Min(_innerSpotAngle, _spotAngle);
+        }
+    }
+
+    // Uses the same prefab as world drops (ItemPrefabCatalog) so held and dropped
+    // flashlights always match. Strips physics / pickup components from the instance
+    private void EnsureHeldVisual()
+    {
+        if (_anchor == null || _heldVisualRoot != null)
+            return;
+
+        // Remove legacy procedural mesh if an old anchor somehow already has one
+        Transform legacy = _anchor.transform.Find("__FlashlightVisual");
+        if (legacy != null)
+            Destroy(legacy.gameObject);
+
+        ItemPrefabCatalog catalog = ItemPrefabCatalog.Load();
+        if (catalog != null &&
+            catalog.TryGetPrefab(InventoryItemType.Flashlight, out WorldInventoryItem prefab) &&
+            prefab != null)
+        {
+            GameObject instance = Instantiate(prefab.gameObject, _anchor.transform);
+            instance.name = "HeldFlashlightMesh";
+            StripWorldItemComponents(instance);
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+            _heldVisualRoot = instance.transform;
+            return;
+        }
+
+        Transform placeholder = FlashlightVisualFactory.EnsurePlaceholderVisual(_anchor.transform);
+        if (placeholder != null)
+        {
+            placeholder.localScale = new Vector3(0.9f, 0.9f, 0.9f);
+            _heldVisualRoot = placeholder;
+        }
+    }
+
+    private static void StripWorldItemComponents(GameObject root)
+    {
+        WorldInventoryItem worldItem = root.GetComponent<WorldInventoryItem>();
+        if (worldItem != null)
+            Destroy(worldItem);
+
+        Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i] != null)
+                Destroy(colliders[i]);
+        }
+
+        Rigidbody[] bodies = root.GetComponentsInChildren<Rigidbody>(true);
+        for (int i = 0; i < bodies.Length; i++)
+        {
+            if (bodies[i] != null)
+                Destroy(bodies[i]);
         }
     }
 

@@ -37,12 +37,9 @@ public sealed class WorldInventoryItem : MonoBehaviour
         Quaternion rotation,
         Transform droppedBy)
     {
-        GameObject go = new GameObject($"{InventoryItemCatalog.GetDisplayName(itemType)}_world_item");
-        go.transform.SetPositionAndRotation(position, rotation);
-
-        WorldInventoryItem worldItem = go.AddComponent<WorldInventoryItem>();
-        worldItem.Configure(itemType);
-        worldItem.IgnorePlayerCollisionTemporarily(droppedBy, 0.35f);
+        WorldInventoryItem worldItem = Spawn(itemType, position, rotation, networkItemId: -1);
+        if (worldItem != null)
+            worldItem.IgnorePlayerCollisionTemporarily(droppedBy, 0.35f);
         return worldItem;
     }
 
@@ -61,12 +58,9 @@ public sealed class WorldInventoryItem : MonoBehaviour
             return existing;
         }
 
-        GameObject go = new GameObject($"{InventoryItemCatalog.GetDisplayName(itemType)}_world_item_{networkItemId}");
-        go.transform.SetPositionAndRotation(position, rotation);
-
-        WorldInventoryItem worldItem = go.AddComponent<WorldInventoryItem>();
-        worldItem._networkItemId = networkItemId;
-        worldItem.Configure(itemType);
+        WorldInventoryItem worldItem = Spawn(itemType, position, rotation, networkItemId);
+        if (worldItem == null)
+            return null;
 
         if (worldItem.TryGetComponent(out Rigidbody body))
             body.linearVelocity = velocity;
@@ -85,20 +79,67 @@ public sealed class WorldInventoryItem : MonoBehaviour
             Destroy(worldItem.gameObject);
     }
 
+    private static WorldInventoryItem Spawn(
+        InventoryItemType itemType,
+        Vector3 position,
+        Quaternion rotation,
+        int networkItemId)
+    {
+        ItemPrefabCatalog catalog = ItemPrefabCatalog.Load();
+        if (catalog != null && catalog.TryGetPrefab(itemType, out WorldInventoryItem prefab) && prefab != null)
+        {
+            WorldInventoryItem instance = Instantiate(prefab, position, rotation);
+            instance.FinalizeSpawn(itemType, networkItemId, useProceduralVisualFallback: false);
+            return instance;
+        }
+
+        Debug.LogWarning(
+            $"[WorldInventoryItem] No prefab in ItemPrefabCatalog for {itemType}. " +
+            $"Add Assets/Prefabs/Items/{InventoryItemCatalog.GetDisplayName(itemType)}.prefab " +
+            "and run Tools/Urbex/Refresh Item Prefab Catalog.");
+
+        return SpawnProceduralFallback(itemType, position, rotation, networkItemId);
+    }
+
+    private static WorldInventoryItem SpawnProceduralFallback(
+        InventoryItemType itemType,
+        Vector3 position,
+        Quaternion rotation,
+        int networkItemId)
+    {
+        GameObject go = new GameObject($"{InventoryItemCatalog.GetDisplayName(itemType)}_world_item");
+        go.transform.SetPositionAndRotation(position, rotation);
+
+        WorldInventoryItem worldItem = go.AddComponent<WorldInventoryItem>();
+        worldItem.FinalizeSpawn(itemType, networkItemId, useProceduralVisualFallback: true);
+        return worldItem;
+    }
+
     public void Configure(InventoryItemType itemType)
     {
+        FinalizeSpawn(itemType, _networkItemId, useProceduralVisualFallback: true);
+    }
+
+    private void FinalizeSpawn(InventoryItemType itemType, int networkItemId, bool useProceduralVisualFallback)
+    {
         _itemType = itemType;
-        EnsureSetup();
+        _networkItemId = networkItemId;
+        EnsurePhysicsComponents();
+
+        if (useProceduralVisualFallback)
+            EnsureProceduralVisual();
+
+        gameObject.name = $"{DisplayName}_world_item";
     }
 
     private void Awake()
     {
-        EnsureSetup();
+        EnsurePhysicsComponents();
     }
 
     private void Reset()
     {
-        EnsureSetup();
+        EnsurePhysicsComponents();
     }
 
     private void OnDestroy()
@@ -111,10 +152,8 @@ public sealed class WorldInventoryItem : MonoBehaviour
         }
     }
 
-    private void EnsureSetup()
+    private void EnsurePhysicsComponents()
     {
-        gameObject.name = $"{DisplayName}_world_item";
-
         if (_boxCollider == null && !TryGetComponent(out _boxCollider))
             _boxCollider = gameObject.AddComponent<BoxCollider>();
 
@@ -129,11 +168,10 @@ public sealed class WorldInventoryItem : MonoBehaviour
         _rigidbody.useGravity = true;
         _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
         _rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-
-        EnsureVisual();
     }
 
-    private void EnsureVisual()
+    // Legacy placeholder mesh when no prefab exists in Prefabs/Items/
+    private void EnsureProceduralVisual()
     {
         if (_itemType != InventoryItemType.Flashlight)
             return;
