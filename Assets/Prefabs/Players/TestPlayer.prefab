@@ -163,10 +163,10 @@ MonoBehaviour:
   gravity: -20
   maxSprintCharge: 10
   sprintDrainRate: 2
-  sprintRegenRate: 1
+  sprintRegenRate: 1.5
   minSprintRequired: 3
   noStaminaJumpMultiplier: 0.75
-  jumpStaminaCostPercent: 0.01
+  jumpStaminaCostPercent: 0.1
   groundedStickForce: -2
   airControlMultiplier: 0.6
   fallMultiplier: 1.05
@@ -297,10 +297,10 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 2723982658518787085}
   _networkObjectCache: {fileID: 2723982658518787085}
   _maxHealth: 100
-  _healthRegenDelaySeconds: 3
-  _healthRegenPerSecond: 10
+  _healthRegenDelaySeconds: 5
+  _healthRegenPerSecond: 5
   _minDownwardSpeedForDamage: 15
-  _fallDamagePerSpeedOverThreshold: 5
+  _fallDamagePerSpeedOverThreshold: 10
   _maxAcceptedFallSpeed: 80
 --- !u!114 &3847592018374659999
 MonoBehaviour:
@@ -379,7 +379,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584216790183174729
+  _initializedTimestamp: -8584216746821887446
 --- !u!1 &4487654722471429204
 GameObject:
   m_ObjectHideFlags: 0
