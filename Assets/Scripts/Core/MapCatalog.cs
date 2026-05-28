@@ -1,19 +1,15 @@
 using System;
 using UnityEngine;
 
-// Runtime list of gameplay maps the player can pick in the lobby.
-//
-// The asset lives at Assets/Resources/MapCatalog.asset and is auto-generated /
-// kept in sync with Assets/Scenes/Gameplay/*.unity by Editor/MapCatalogAutoSync.cs.
-// You can edit `displayName` by hand on each entry; the auto-sync preserves
-// custom display names across re-imports. Scene names themselves are the source
-// of truth - drop a new .unity file in Scenes/Gameplay/ and it will appear here.
-//
-// Loaded once at runtime via Resources.Load. If the asset doesn't exist yet,
-// Load() returns null and callers should treat that as "no maps available".
+/// <summary>
+/// Runtime list of gameplay maps for the lobby. Asset path: Assets/Resources/MapCatalog.asset,
+/// auto-synced from Assets/Scenes/Gameplay/ by <c>MapCatalogAutoSync</c>. Custom
+/// <see cref="MapEntry.displayName"/> values are preserved across re-imports; scene file names are authoritative.
+/// </summary>
 [CreateAssetMenu(fileName = "MapCatalog", menuName = "UrbexSim/Map Catalog")]
 public sealed class MapCatalog : ScriptableObject
 {
+    /// <summary>One selectable gameplay scene.</summary>
     [Serializable]
     public class MapEntry
     {
@@ -24,12 +20,17 @@ public sealed class MapCatalog : ScriptableObject
         public string displayName;
     }
 
+    /// <summary>Serialized map list; replaced by editor auto-sync.</summary>
     [SerializeField]
     private MapEntry[] _maps = Array.Empty<MapEntry>();
 
+    /// <summary>All map entries (never null).</summary>
     public MapEntry[] Maps => _maps ?? Array.Empty<MapEntry>();
+
+    /// <summary>Number of entries.</summary>
     public int Count => _maps?.Length ?? 0;
 
+    /// <summary>Looks up an entry by zero-based index.</summary>
     public bool TryGetByIndex(int index, out MapEntry entry)
     {
         if (_maps != null && index >= 0 && index < _maps.Length && _maps[index] != null)
@@ -41,6 +42,7 @@ public sealed class MapCatalog : ScriptableObject
         return false;
     }
 
+    /// <summary>Looks up an entry by scene name (without .unity).</summary>
     public bool TryGetBySceneName(string sceneName, out MapEntry entry, out int index)
     {
         entry = null;
@@ -60,19 +62,19 @@ public sealed class MapCatalog : ScriptableObject
         return false;
     }
 
-    // Editor-only entry point for MapCatalogAutoSync. Don't call at runtime - the
-    // catalog should be treated as immutable once the game is running.
+    /// <summary>Editor-only replacement of entries; do not call at runtime.</summary>
     public void SetMaps(MapEntry[] entries)
     {
         _maps = entries ?? Array.Empty<MapEntry>();
     }
 
-    // ---- Runtime load ----
-
+    /// <summary>Resources.Load path for this catalog.</summary>
     public const string ResourcesPath = "MapCatalog";
 
+    /// <summary>Cached instance from the last <see cref="Load"/> call.</summary>
     private static MapCatalog _cached;
 
+    /// <summary>Loads and caches the catalog from Resources; returns null if missing.</summary>
     public static MapCatalog Load()
     {
         if (_cached != null)
@@ -81,7 +83,6 @@ public sealed class MapCatalog : ScriptableObject
         return _cached;
     }
 
-    // Allow tests / editor tooling to invalidate the cache so the next Load picks
-    // up an updated asset without a domain reload.
+    /// <summary>Clears the runtime cache so the next <see cref="Load"/> reads the asset again.</summary>
     public static void InvalidateCache() => _cached = null;
 }

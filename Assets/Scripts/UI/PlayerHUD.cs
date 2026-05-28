@@ -1,20 +1,43 @@
 using UnityEngine;
 using UnityEngine.UIElements;
 
+/// <summary>Gameplay HUD bindings for health, stamina, hotbar, and context hints.</summary>
 public class PlayerHUD : MonoBehaviour
 {
+    /// <summary>UI Toolkit health bar fill element.</summary>
     private VisualElement healthFill;
+
+    /// <summary>UI Toolkit stamina bar fill element.</summary>
     private VisualElement staminaFill;
+
+    /// <summary>Context hint row (camera equip, interact, etc.).</summary>
     private VisualElement cameraHintRow;
+
+    /// <summary>Text inside the context hint row.</summary>
     private Label cameraHintLabel;
+
+    /// <summary>Hotbar container for slot styling.</summary>
     private VisualElement hotbarRoot;
+
+    /// <summary>Item key hint block below the hotbar.</summary>
     private VisualElement itemKeyHintsRow;
+
+    /// <summary>First line of item key hints.</summary>
     private Label itemKeyHintLine0;
+
+    /// <summary>Second line of item key hints.</summary>
     private Label itemKeyHintLine1;
+
+    /// <summary>Five hotbar slot visual elements.</summary>
     private VisualElement[] hotbarSlots;
+
+    /// <summary>Item name labels per hotbar slot.</summary>
     private Label[] hotbarItemLabels;
+
+    /// <summary>Key badge labels per hotbar slot.</summary>
     private Label[] hotbarKeyLabels;
 
+    /// <summary>Lazy-queries UIDocument elements by name on first use.</summary>
     private void TryBindFills()
     {
         if (healthFill != null &&
@@ -51,6 +74,7 @@ public class PlayerHUD : MonoBehaviour
         if (itemKeyHintLine1 == null)
             itemKeyHintLine1 = root.Q<Label>("itemKeyHintLine1");
 
+        // Resolve five hotbar slots and paired item/key labels.
         if (hotbarSlots == null || hotbarSlots.Length != 5)
         {
             hotbarSlots = new VisualElement[5];
@@ -65,6 +89,7 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
+    /// <summary>Shows or hides the context hint row with the given text.</summary>
     public void SetContextHint(bool visible, string line)
     {
         TryBindFills();
@@ -74,11 +99,13 @@ public class PlayerHUD : MonoBehaviour
             cameraHintRow.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
     }
 
+    /// <summary>Alias for <see cref="SetContextHint"/> (camera equip line).</summary>
     public void SetCameraEquipHint(bool visible, string line)
     {
         SetContextHint(visible, line);
     }
 
+    /// <summary>Sets health bar fill (0 to 1) and color band.</summary>
     public void SetHealth(float percent)
     {
         TryBindFills();
@@ -95,6 +122,7 @@ public class PlayerHUD : MonoBehaviour
             healthFill.style.backgroundColor = Color.red;
     }
 
+    /// <summary>Sets stamina bar fill (0 to 1) and color band.</summary>
     public void SetStamina(float percent)
     {
         TryBindFills();
@@ -117,6 +145,7 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
+    /// <summary>Shows item key hint lines below the hotbar.</summary>
     public void SetItemKeyHints(bool visible, string line0, string line1 = null)
     {
         TryBindFills();
@@ -139,6 +168,7 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
+    /// <summary>Updates hotbar slot availability, selection, labels, and key badges.</summary>
     public void SetHotbarState(int availableSlots, int selectedIndex, string[] slotItemNames = null, string[] slotKeyLabels = null)
     {
         TryBindFills();

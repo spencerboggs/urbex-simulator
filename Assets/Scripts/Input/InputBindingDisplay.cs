@@ -1,10 +1,10 @@
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 
+/// <summary>Display labels for common keyboard keys via the Input System.</summary>
 public static class InputBindingDisplay
 {
-    // Short label for a keyboard letter such as C
-    // Uses Input System displayName when available
+    /// <summary>Returns the Input System display name for a letter key, or <paramref name="letterFallback"/>.</summary>
     public static string GetPrimaryKeyboardDisplay(string letterFallback)
     {
         if (string.IsNullOrEmpty(letterFallback))
@@ -14,6 +14,7 @@ public static class InputBindingDisplay
         if (kb == null)
             return letterFallback;
 
+        // Map common HUD letters to Input System controls for localized key labels.
         KeyControl key = letterFallback.ToUpperInvariant() switch
         {
             "C" => kb.cKey,

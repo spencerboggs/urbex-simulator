@@ -4,8 +4,9 @@ using FishNet.Object;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-// Owner-only handheld camera
-// Toggles viewfinder UI and saves captures via PhotoRollSession
+/// <summary>
+/// Owner-only handheld camera: viewfinder UI, scroll zoom, and saves via <see cref="PhotoRollSession"/>.
+/// </summary>
 [DisallowMultipleComponent]
 public sealed class PlayerCameraMode : MonoBehaviour
 {
@@ -45,19 +46,40 @@ public sealed class PlayerCameraMode : MonoBehaviour
     [Min(1f)]
     private float _zoomLerpSpeed = 12f;
 
+    /// <summary>Child camera used for gameplay view and capture.</summary>
     private Camera _gameplayCamera;
+
+    /// <summary>HUD controller for hints while camera mode is active.</summary>
     private PlayerHUDController _hudController;
+
+    /// <summary>NetworkObject when spawned; null in offline test.</summary>
     private NetworkObject _networkObject;
+
+    /// <summary>Viewfinder overlay component on the prefab instance.</summary>
     private CameraViewfinderUI _viewfinder;
+
+    /// <summary>Instantiated viewfinder prefab root.</summary>
     private GameObject _viewfinderInstance;
+
+    /// <summary>True when viewfinder UI and zoom are active.</summary>
     private bool _cameraEquipped;
+
+    /// <summary>Unscaled time after which another photo capture is allowed.</summary>
     private float _nextCaptureAllowedUnscaledTime;
+
+    /// <summary>FOV restored when stowing the camera.</summary>
     private float _defaultFov;
+
+    /// <summary>Target normalized zoom (0 wide, 1 tele).</summary>
     private float _zoomTargetT;
+
+    /// <summary>Smoothed normalized zoom for FOV lerp.</summary>
     private float _zoomCurrentT;
 
+    /// <summary>True when the viewfinder is active.</summary>
     public bool IsEquipped => _cameraEquipped;
 
+    /// <summary>Caches camera, HUD, and network references.</summary>
     private void Awake()
     {
         _gameplayCamera = GetComponentInChildren<Camera>(true);
@@ -70,6 +92,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
             _defaultFov = _maxFov;
     }
 
+    /// <summary>Instantiates the viewfinder prefab as a disabled child.</summary>
     private void Start()
     {
         if (_viewfinderPrefab != null)
@@ -80,11 +103,13 @@ public sealed class PlayerCameraMode : MonoBehaviour
         }
     }
 
+    /// <summary>Clears camera equip hint when this component enables.</summary>
     private void OnEnable()
     {
         _hudController?.SetCameraEquipHint(false, string.Empty);
     }
 
+    /// <summary>Stows camera and exits viewfinder when disabled mid-session.</summary>
     private void OnDisable()
     {
         if (_cameraEquipped)
@@ -94,12 +119,14 @@ public sealed class PlayerCameraMode : MonoBehaviour
         }
     }
 
+    /// <summary>Destroys the viewfinder instance with this player.</summary>
     private void OnDestroy()
     {
         if (_viewfinderInstance != null)
             Destroy(_viewfinderInstance);
     }
 
+    /// <summary>True for owner when networked, or always when not spawned.</summary>
     private bool IsLocalControllingPlayer()
     {
         if (_networkObject == null || !_networkObject.IsSpawned)
@@ -107,6 +134,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         return _networkObject.IsOwner;
     }
 
+    /// <summary>Owner input: scroll zoom, left-click capture, and zoom lerp while equipped.</summary>
     private void Update()
     {
         if (!IsLocalControllingPlayer())
@@ -121,7 +149,6 @@ public sealed class PlayerCameraMode : MonoBehaviour
         Mouse mouse = Mouse.current;
         if (mouse != null)
         {
-            // Scroll up = zoom in (toward T), scroll down = zoom out (toward W)
             float scrollY = mouse.scroll.ReadValue().y;
             if (Mathf.Abs(scrollY) > 0.01f)
             {
@@ -139,12 +166,12 @@ public sealed class PlayerCameraMode : MonoBehaviour
         ApplyZoom();
     }
 
+    /// <summary>Lerps FOV between wide and tele and updates the viewfinder zoom bar.</summary>
     private void ApplyZoom()
     {
         if (_gameplayCamera == null)
             return;
 
-        // Lerp the displayed zoom toward the target so it feels analog
         float lerpAmount = 1f - Mathf.Exp(-_zoomLerpSpeed * Time.unscaledDeltaTime);
         _zoomCurrentT = Mathf.Lerp(_zoomCurrentT, _zoomTargetT, lerpAmount);
 
@@ -154,6 +181,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         _viewfinder?.SetZoomLevel(_zoomCurrentT);
     }
 
+    /// <summary>Equips or stows the handheld camera viewfinder.</summary>
     public void SetEquipped(bool equipped)
     {
         if (_viewfinder == null)
@@ -171,6 +199,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         _hudController?.SetCameraEquipHint(false, string.Empty);
     }
 
+    /// <summary>Activates viewfinder, resets zoom, and refreshes control hints.</summary>
     private void EnterCamera()
     {
         if (_viewfinderInstance == null)
@@ -189,6 +218,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         UpdateViewfinderHints();
     }
 
+    /// <summary>Deactivates viewfinder and restores default FOV.</summary>
     private void ExitCamera()
     {
         if (_viewfinderInstance != null)
@@ -200,6 +230,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         _zoomTargetT = 0f;
     }
 
+    /// <summary>Sets capture and stow labels on the viewfinder overlay.</summary>
     private void UpdateViewfinderHints()
     {
         if (_viewfinder == null)
@@ -208,12 +239,14 @@ public sealed class PlayerCameraMode : MonoBehaviour
         _viewfinder.SetControlHints("Click - take photo", "C");
     }
 
+    /// <summary>Keeps min FOV from exceeding max in the inspector.</summary>
     private void OnValidate()
     {
         if (_minFov > _maxFov)
             _minFov = _maxFov;
     }
 
+    /// <summary>Captures PNG, writes to PhotoRollSession folder, and shows saved toast.</summary>
     private void TakePhoto()
     {
         if (_gameplayCamera == null)
@@ -223,6 +256,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
 
         _viewfinder?.PlayShutterEffect();
 
+        // Render, save under match/player folder, append manifest line.
         byte[] png = GameplayPhotoCapture.CaptureToPng(_gameplayCamera, _photoWidth, _photoHeight);
         if (png == null || png.Length == 0)
             return;
@@ -243,6 +277,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         Debug.Log($"[Photo] Saved gameplay capture to {absolutePath}");
     }
 
+    /// <summary>Per-player subdirectory name under the session photo roll.</summary>
     private string BuildPlayerFolderLabel()
     {
         if (_networkObject != null && _networkObject.IsSpawned && _networkObject.IsOwner)

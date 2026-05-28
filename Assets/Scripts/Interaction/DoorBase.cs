@@ -1,19 +1,13 @@
 using UnityEngine;
 
-// Abstract base for all door types. Implements IInteractable + an open/close state
-// machine over a normalized progress value (0 = closed, 1 = open). Subclasses only
-// have to translate that progress into a visual (rotation, slide, etc.) by
-// overriding ApplyProgress
-//
-// The progress value is hard-clamped to [0, 1] every frame so a slow framerate or
-// huge deltaTime spike can never cause the door to over-shoot past closed/open
-//
-// State is one-way at any given moment: a door is either Closed, Opening, Open, or
-// Closing. Interacting while Opening flips to Closing (and vice-versa) so a player
-// mid-animation can immediately reverse course without breaking the clamp
+/// <summary>
+/// Base door with normalized open progress (0 = closed, 1 = open). Subclasses implement
+/// <see cref="ApplyProgress"/> for the visual pose. Progress is clamped each frame.
+/// </summary>
 [DisallowMultipleComponent]
 public abstract class DoorBase : MonoBehaviour, IInteractable
 {
+    /// <summary>Door motion state.</summary>
     public enum DoorState
     {
         Closed,
@@ -45,11 +39,16 @@ public abstract class DoorBase : MonoBehaviour, IInteractable
     [SerializeField]
     protected bool _interactionEnabled = true;
 
-    // Normalized progress: 0 = fully closed, 1 = fully open. Always clamped
+    /// <summary>Normalized open amount in [0, 1], driven by <see cref="Update"/> while animating.</summary>
     private float _progress;
+
+    /// <summary>Current door state machine value.</summary>
     private DoorState _state;
 
+    /// <summary>Current state machine state.</summary>
     public DoorState State => _state;
+
+    /// <summary>Normalized open amount in [0, 1].</summary>
     public float Progress => _progress;
 
     protected virtual void Awake()
@@ -66,8 +65,7 @@ public abstract class DoorBase : MonoBehaviour, IInteractable
             float direction = _state == DoorState.Opening ? 1f : -1f;
             float next = _progress + direction * _animationSpeed * Time.deltaTime;
 
-            // Hard clamp so frame spikes can't push progress past the endpoints,
-            // then snap into the matching terminal state
+            // Snap to endpoints and transition state when progress crosses fully open or closed.
             if (next >= 1f)
             {
                 _progress = 1f;
@@ -87,14 +85,10 @@ public abstract class DoorBase : MonoBehaviour, IInteractable
         }
     }
 
-    // Hook for subclasses: 0 means render the closed pose, 1 means the open pose,
-    // anything in between is the interpolated frame. Called every Update while the
-    // door is animating, plus once during Awake to set the initial pose
+    /// <summary>Applies visual pose for normalized progress (0 = closed, 1 = open).</summary>
     protected abstract void ApplyProgress(float progress01);
 
-    // Flips the door between open and closed. Mid-animation toggles reverse the
-    // direction without losing progress, so spamming the key never desyncs the
-    // visual from the state
+    /// <summary>Toggles open/closed; mid-animation input reverses direction.</summary>
     public virtual void Toggle()
     {
         switch (_state)
@@ -110,6 +104,7 @@ public abstract class DoorBase : MonoBehaviour, IInteractable
         }
     }
 
+    /// <summary>Starts opening if not already open or opening.</summary>
     public virtual void Open()
     {
         if (_state == DoorState.Open || _state == DoorState.Opening)
@@ -117,6 +112,7 @@ public abstract class DoorBase : MonoBehaviour, IInteractable
         _state = DoorState.Opening;
     }
 
+    /// <summary>Starts closing if not already closed or closing.</summary>
     public virtual void Close()
     {
         if (_state == DoorState.Closed || _state == DoorState.Closing)
@@ -124,22 +120,21 @@ public abstract class DoorBase : MonoBehaviour, IInteractable
         _state = DoorState.Closing;
     }
 
-    // ---- IInteractable ----
-
+    /// <inheritdoc />
     public virtual bool CanInteract(Transform interactor) => _interactionEnabled;
 
+    /// <inheritdoc />
     public virtual string GetInteractionPrompt()
     {
         if (!_interactionEnabled)
             return string.Empty;
 
-        // While animating, anticipate the result so the prompt doesn't flicker
-        // (a half-open door says "Close" if it's currently opening - pressing E
-        // will reverse it to closing)
+        // Open or mid-open means the next interact will start closing.
         bool willCloseNext = _state == DoorState.Open || _state == DoorState.Opening;
         return willCloseNext ? _closePrompt : _openPrompt;
     }
 
+    /// <inheritdoc />
     public virtual void Interact(Transform interactor)
     {
         if (!_interactionEnabled)

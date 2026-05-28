@@ -3,15 +3,17 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-// Keeps Assets/Resources/ItemPrefabCatalog.asset in sync with prefabs in
-// Assets/Prefabs/Items/. Each prefab must have a WorldInventoryItem whose
-// Item Type field defines the catalog key
+/// <summary>
+/// Keeps ItemPrefabCatalog.asset in sync with prefabs under Assets/Prefabs/Items/
+/// (keyed by root WorldInventoryItem item type).
+/// </summary>
 public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
 {
     private const string ItemsPrefabsRoot = "Assets/Prefabs/Items";
     private const string ResourcesFolder = "Assets/Resources";
     private const string CatalogAssetPath = ResourcesFolder + "/ItemPrefabCatalog.asset";
 
+    /// <summary>Creates the catalog asset on editor load when it does not exist yet.</summary>
     [InitializeOnLoadMethod]
     private static void ResyncOnLoad()
     {
@@ -22,6 +24,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
         };
     }
 
+    /// <summary>Asset postprocessor hook: resync when item prefabs under ItemsPrefabsRoot change.</summary>
     private static void OnPostprocessAllAssets(
         string[] importedAssets,
         string[] deletedAssets,
@@ -35,6 +38,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
         }
     }
 
+    /// <summary>Manual refresh from the Tools menu.</summary>
     [MenuItem("Tools/Urbex/Refresh Item Prefab Catalog")]
     public static void RefreshFromMenu()
     {
@@ -42,6 +46,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
         Debug.Log("[ItemPrefabCatalogAutoSync] Manual refresh complete.");
     }
 
+    /// <summary>True when any path is a prefab under ItemsPrefabsRoot.</summary>
     private static bool AnyItemPrefab(string[] paths)
     {
         if (paths == null)
@@ -63,6 +68,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
         return false;
     }
 
+    /// <summary>Scans item prefabs and writes ItemPrefabCatalog.asset entries.</summary>
     private static void Resync()
     {
         if (!Directory.Exists(ItemsPrefabsRoot))
@@ -86,6 +92,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
             string[] prefabPaths = Directory.GetFiles(ItemsPrefabsRoot, "*.prefab", SearchOption.AllDirectories);
             System.Array.Sort(prefabPaths, System.StringComparer.OrdinalIgnoreCase);
 
+            // One catalog row per prefab with a valid WorldInventoryItem item type.
             for (int i = 0; i < prefabPaths.Length; i++)
             {
                 string assetPath = prefabPaths[i].Replace('\\', '/');
@@ -129,6 +136,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
         }
     }
 
+    /// <summary>Compares catalog entries for item type and prefab reference equality.</summary>
     private static bool EntriesEqual(
         ItemPrefabCatalog.ItemPrefabEntry[] a,
         List<ItemPrefabCatalog.ItemPrefabEntry> b)
@@ -151,6 +159,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
         return true;
     }
 
+    /// <summary>Recursively creates an Assets/... folder path when missing.</summary>
     private static void EnsureFolderExists(string folder)
     {
         if (AssetDatabase.IsValidFolder(folder))

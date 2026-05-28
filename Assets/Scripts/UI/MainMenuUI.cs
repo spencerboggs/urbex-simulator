@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-// Main menu and Play submenu navigation. Calls NetworkSessionController only, no networking logic
+/// <summary>Main menu and play submenu; delegates networking to <see cref="NetworkSessionController"/>.</summary>
 public sealed class MainMenuUI : MonoBehaviour
 {
     [SerializeField]
@@ -37,12 +37,12 @@ public sealed class MainMenuUI : MonoBehaviour
     [Tooltip("If no panels are assigned, a default Canvas is generated at runtime.")]
     private bool _generateDefaultUiIfEmpty = true;
 
+    /// <summary>True after menu button listeners are registered once.</summary>
     private bool _wired;
 
+    /// <summary>Builds default UI, resolves session, and shows the main panel.</summary>
     private void Awake()
     {
-        // MainMenu scene may have no Camera (copied from level) 
-        // Game view shows "No cameras rendering" and UI can fail to show
         MultiplayerUiRuntimeBuilder.EnsureSceneCamera();
         MultiplayerUiRuntimeBuilder.EnsureEventSystem();
 
@@ -59,6 +59,7 @@ public sealed class MainMenuUI : MonoBehaviour
         ShowMain();
     }
 
+    /// <summary>Wires runtime-generated UI references from <see cref="MultiplayerUiRuntimeBuilder"/>.</summary>
     public void ApplyRuntimeReferences(
         GameObject mainPanel,
         GameObject playPanel,
@@ -79,19 +80,18 @@ public sealed class MainMenuUI : MonoBehaviour
         _playMenuBackButton = backButton;
     }
 
+    /// <summary>Registers onClick handlers for main and play submenu buttons.</summary>
     private void WireButtonsOnce()
     {
         if (_wired)
             return;
         _wired = true;
 
-        // Wire up button click listeners to their respective handler methods
         if (_playButton != null)
             _playButton.onClick.AddListener(ShowPlay);
         if (_quitButton != null)
             _quitButton.onClick.AddListener(QuitApplication);
 
-        // Play menu buttons for hosting, joining, and returning to the main menu
         if (_playMenuBackButton != null)
             _playMenuBackButton.onClick.AddListener(ShowMain);
 
@@ -102,42 +102,43 @@ public sealed class MainMenuUI : MonoBehaviour
             _playMenuJoinButton.onClick.AddListener(OnJoinClicked);
     }
 
+    /// <summary>Shows the main menu panel.</summary>
     public void ShowMain()
     {
-        // Show the main menu panel and hide the play submenu panel
         if (_mainPanel != null)
             _mainPanel.SetActive(true);
         if (_playPanel != null)
             _playPanel.SetActive(false);
     }
 
+    /// <summary>Shows the play submenu panel.</summary>
     public void ShowPlay()
     {
-        // Show the play submenu panel and hide the main menu panel
         if (_mainPanel != null)
             _mainPanel.SetActive(false);
         if (_playPanel != null)
             _playPanel.SetActive(true);
     }
 
+    /// <summary>Starts hosting and transitions to the lobby when ready.</summary>
     public void OnHostClicked()
     {
-        // Start hosting a session, which will transition to the lobby scene for all clients once ready
         if (_session == null)
             return;
         _session.StartHost();
     }
 
+    /// <summary>Joins using the join address field.</summary>
     public void OnJoinClicked()
     {
         if (_session == null)
             return;
 
-        // Join field: host Steam ID (steamId64) when using FishySteamworks
         string joinFieldText = _joinAddressInput != null ? _joinAddressInput.text : null;
         _session.StartClient(joinFieldText);
     }
 
+    /// <summary>Stops play mode in editor or quits the standalone build.</summary>
     private static void QuitApplication()
     {
 #if UNITY_EDITOR

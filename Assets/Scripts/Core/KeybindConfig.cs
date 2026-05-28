@@ -1,56 +1,64 @@
 using System;
 
-// User-editable keybind configuration. Serialized to JSON at
-// Application.persistentDataPath/keybinds.json by KeybindManager. Field names match
-// the JSON keys verbatim, so anything you rename here is a breaking change for saved
-// configs - bump `Version` if you do
-//
-// Every value must match a name in the UnityEngine.InputSystem.Key enum
-// (case-insensitive). Examples: "E", "Q", "Space", "LeftShift", "LeftCtrl",
-// "Digit1" (the "1" key on the number row), "W", "A", "S", "D"
-//
-// NOTE: not every action below is currently wired up in the game. The full list is
-// kept in one place so the JSON file is forward-compatible - future migrations of
-// PlayerMovement / ClimbingController etc. can adopt these without changing the file
-// format. Actions that are wired today are flagged with [active]; the rest are
-// reserved.
+/// <summary>
+/// User-editable keybind configuration serialized to
+/// Application.persistentDataPath/keybinds.json by <see cref="KeybindManager"/>.
+/// JSON field names match property names; bump <see cref="Version"/> on breaking layout changes.
+/// Values must match <see cref="UnityEngine.InputSystem.Key"/> names (case-insensitive).
+/// </summary>
 [Serializable]
 public class KeybindConfig
 {
-    // Bump if the JSON layout changes in a breaking way
+    /// <summary>Schema version for migrations.</summary>
     public int Version = 2;
 
-    // [active] Pick up world items, open doors, and other context-sensitive interactions
+    /// <summary>Interact (pickup, doors, context use).</summary>
     public string Interact = "E";
 
-    // [active] Drop the currently selected inventory item
+    /// <summary>Drop equipped item.</summary>
     public string Drop = "Q";
 
-    // [active] Primary action for the equipped item (flashlight toggle, spray paint, etc.)
-    // Uses mouse button names from the Input System: LeftButton, RightButton, MiddleButton
+    /// <summary>Primary use for equipped item (mouse button names: LeftButton, RightButton, MiddleButton).</summary>
     public string ItemPrimaryUse = "LeftButton";
 
-    // Reserved - PlayerMovement still polls these directly
+    /// <summary>Reserved for future PlayerMovement wiring.</summary>
     public string Jump = "Space";
+
+    /// <summary>Reserved for future PlayerMovement wiring.</summary>
     public string Sprint = "LeftShift";
+
+    /// <summary>Reserved for future PlayerMovement wiring.</summary>
     public string Crouch = "LeftCtrl";
 
-    // Reserved - PlayerInventoryController still polls these directly
+    /// <summary>Reserved for future inventory wiring.</summary>
     public string Camera = "C";
+
+    /// <summary>Reserved for future inventory wiring.</summary>
     public string Slot1 = "Digit1";
+
+    /// <summary>Reserved for future inventory wiring.</summary>
     public string Slot2 = "Digit2";
+
+    /// <summary>Reserved for future inventory wiring.</summary>
     public string Slot3 = "Digit3";
+
+    /// <summary>Reserved for future inventory wiring.</summary>
     public string Slot4 = "Digit4";
 
-    // Reserved - PlayerMovement / ClimbingController still poll WASD directly
+    /// <summary>Reserved for future movement wiring.</summary>
     public string MoveForward = "W";
+
+    /// <summary>Reserved for future movement wiring.</summary>
     public string MoveBackward = "S";
+
+    /// <summary>Reserved for future movement wiring.</summary>
     public string MoveLeft = "A";
+
+    /// <summary>Reserved for future movement wiring.</summary>
     public string MoveRight = "D";
 }
 
-// Identifier for every rebindable action in the game. Names map 1:1 to fields on
-// KeybindConfig. KeybindManager handles the lookup from action -> configured key
+/// <summary>Rebindable actions; names map 1:1 to <see cref="KeybindConfig"/> fields.</summary>
 public enum KeybindAction
 {
     Interact,

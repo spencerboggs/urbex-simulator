@@ -1,11 +1,12 @@
 using UnityEngine;
 
+/// <summary>Creates a hidden SteamBootstrap before the first scene loads.</summary>
 internal static class SteamBootstrapRuntime
 {
+    /// <summary>Spawns SteamBootstrap when none exists in the loaded scenes.</summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void EnsureSteamBootstrap()
     {
-        // Avoid duplicates when domain reload is disabled or when entering play mode repeatedly
         if (Object.FindAnyObjectByType<SteamBootstrap>() != null)
             return;
 
@@ -14,4 +15,3 @@ internal static class SteamBootstrapRuntime
         go.AddComponent<SteamBootstrap>();
     }
 }
-

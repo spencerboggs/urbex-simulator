@@ -1,11 +1,10 @@
 using System.IO;
 using UnityEngine;
 
+/// <summary>Renders a camera to PNG bytes (world pass only; UI Toolkit not included).</summary>
 public static class GameplayPhotoCapture
 {
-    // Renders the camera to PNG bytes
-    // World pass only
-    // UI Toolkit is not included in this render
+    /// <summary>Captures the camera view to PNG bytes.</summary>
     public static byte[] CaptureToPng(Camera camera, int width, int height)
     {
         if (camera == null)
@@ -26,6 +25,7 @@ public static class GameplayPhotoCapture
 
         try
         {
+            // Render world only; UI Toolkit is not in this camera pass.
             camera.clearFlags = CameraClearFlags.Skybox;
             camera.targetTexture = rt;
             camera.Render();
@@ -47,6 +47,7 @@ public static class GameplayPhotoCapture
         }
     }
 
+    /// <summary>Writes PNG bytes to disk, creating parent directories.</summary>
     public static bool SavePngBytes(byte[] png, string absolutePath)
     {
         if (png == null || png.Length == 0 || string.IsNullOrEmpty(absolutePath))

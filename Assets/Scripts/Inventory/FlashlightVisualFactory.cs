@@ -1,7 +1,9 @@
 using UnityEngine;
 
+/// <summary>Procedural placeholder mesh for flashlight visuals when no art prefab exists.</summary>
 public static class FlashlightVisualFactory
 {
+    /// <summary>Creates or returns an existing placeholder visual under <paramref name="parent"/>.</summary>
     public static Transform EnsurePlaceholderVisual(Transform parent, string rootName = "__FlashlightVisual")
     {
         if (parent == null)
@@ -42,6 +44,7 @@ public static class FlashlightVisualFactory
         return rootTransform;
     }
 
+    /// <summary>Creates a primitive child mesh part and removes its collider so physics stay on the root.</summary>
     private static void CreatePart(
         PrimitiveType primitiveType,
         string name,
@@ -58,6 +61,7 @@ public static class FlashlightVisualFactory
         partTransform.localRotation = localRotation;
         partTransform.localScale = localScale;
 
+        // Procedural parts are visual-only; the world item root owns the BoxCollider.
         Collider collider = part.GetComponent<Collider>();
         if (collider != null)
         {

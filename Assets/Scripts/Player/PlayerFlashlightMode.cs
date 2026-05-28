@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>
+/// Held flashlight mesh and spot light parented to the gameplay camera.
+/// </summary>
 [DisallowMultipleComponent]
 public sealed class PlayerFlashlightMode : MonoBehaviour
 {
@@ -30,16 +33,26 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
     [Range(1f, 140f)]
     private float _innerSpotAngle = 56f;
 
+    /// <summary>Child gameplay camera used as parent for the held flashlight anchor.</summary>
     private Camera _gameplayCamera;
+    /// <summary>Child object parented to the camera holding mesh and spot light.</summary>
     private GameObject _anchor;
+    /// <summary>Spot light on the anchor, toggled when flashlight is on.</summary>
     private Light _spotLight;
+    /// <summary>Instantiated held mesh root (catalog prefab or placeholder).</summary>
     private Transform _heldVisualRoot;
+    /// <summary>Whether the flashlight hotbar slot is currently selected.</summary>
     private bool _equipped;
+    /// <summary>Whether the spotlight is enabled while equipped.</summary>
     private bool _isOn;
 
+    /// <summary>Whether a flashlight is selected in the hotbar.</summary>
     public bool IsEquipped => _equipped;
+
+    /// <summary>Whether the spotlight is enabled.</summary>
     public bool IsOn => _isOn;
 
+    /// <summary>Resolves gameplay camera and builds the flashlight anchor hierarchy.</summary>
     private void Awake()
     {
         _gameplayCamera = GetComponentInChildren<Camera>(true);
@@ -48,12 +61,14 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         RefreshPresentation();
     }
 
+    /// <summary>Hides the anchor when this component is disabled.</summary>
     private void OnDisable()
     {
         if (_anchor != null)
             _anchor.SetActive(false);
     }
 
+    /// <summary>Handles primary-use key to toggle the spotlight while equipped.</summary>
     private void Update()
     {
         if (!_equipped || !isActiveAndEnabled)
@@ -65,6 +80,7 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         Toggle();
     }
 
+    /// <summary>Equips or stows the held flashlight visual and light anchor.</summary>
     public void SetEquipped(bool equipped)
     {
         _equipped = equipped;
@@ -72,6 +88,7 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         RefreshPresentation();
     }
 
+    /// <summary>Toggles the spotlight on or off.</summary>
     public void Toggle()
     {
         if (!_equipped)
@@ -81,12 +98,14 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         RefreshPresentation();
     }
 
+    /// <summary>Sets spotlight on or off explicitly.</summary>
     public void SetOn(bool on)
     {
         _isOn = on;
         RefreshPresentation();
     }
 
+    /// <summary>Creates or updates the camera-parented anchor, mesh, and spot light settings.</summary>
     private void EnsureAnchor()
     {
         if (_gameplayCamera == null)
@@ -95,6 +114,7 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         if (_gameplayCamera == null)
             return;
 
+        // Lazy-create anchor and spot light on first use.
         if (_anchor == null)
         {
             _anchor = new GameObject("__HeldFlashlight");
@@ -121,18 +141,18 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         }
     }
 
-    // Uses the same prefab as world drops (ItemPrefabCatalog) so held and dropped
-    // flashlights always match. Strips physics / pickup components from the instance
+    /// <summary>Instantiates catalog prefab mesh or a placeholder under the anchor.</summary>
+    // Reuses the world-drop prefab so held and dropped flashlights match.
     private void EnsureHeldVisual()
     {
         if (_anchor == null || _heldVisualRoot != null)
             return;
 
-        // Remove legacy procedural mesh if an old anchor somehow already has one
         Transform legacy = _anchor.transform.Find("__FlashlightVisual");
         if (legacy != null)
             Destroy(legacy.gameObject);
 
+        // Prefer world-drop prefab so held and dropped flashlights match.
         ItemPrefabCatalog catalog = ItemPrefabCatalog.Load();
         if (catalog != null &&
             catalog.TryGetPrefab(InventoryItemType.Flashlight, out WorldInventoryItem prefab) &&
@@ -156,6 +176,7 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         }
     }
 
+    /// <summary>Removes pickup, collider, and rigidbody components from a held visual instance.</summary>
     private static void StripWorldItemComponents(GameObject root)
     {
         WorldInventoryItem worldItem = root.GetComponent<WorldInventoryItem>();
@@ -177,6 +198,7 @@ public sealed class PlayerFlashlightMode : MonoBehaviour
         }
     }
 
+    /// <summary>Shows or hides the anchor and enables the spot light based on equip and on state.</summary>
     private void RefreshPresentation()
     {
         if (_anchor == null)

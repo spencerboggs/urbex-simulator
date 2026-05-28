@@ -3,14 +3,10 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-
-// Lobby staging UI: player count (up to 8), map selection, host-only start match, leave session
-//
-// Map data comes from MapCatalog (auto-synced from Assets/Scenes/Gameplay/ by
-// Editor/MapCatalogAutoSync.cs). The host's "Next Map" click is routed through
-// NetworkSessionController.RequestMapChange so the server can validate and
-// replicate the change to every connected client. Non-host clients have the
-// button disabled and only observe the host's selection via broadcast
+/// <summary>
+/// Lobby staging UI: player count, map selection, host start match, and leave session.
+/// Map data comes from <see cref="MapCatalog"/>; selection syncs via <see cref="NetworkSessionController"/>.
+/// </summary>
 public sealed class LobbyUI : MonoBehaviour
 {
     [SerializeField]
@@ -35,22 +31,28 @@ public sealed class LobbyUI : MonoBehaviour
     [Tooltip("If no labels are assigned, a default Canvas is generated at runtime.")]
     private bool _generateDefaultUiIfEmpty = true;
 
+    /// <summary>Loaded MapCatalog for display names and cycling.</summary>
     private MapCatalog _catalog;
+
+    /// <summary>True after button listeners are registered once.</summary>
     private bool _wired;
+
+    /// <summary>Suppresses accidental Start Match clicks right after OnEnable.</summary>
     private float _ignoreStartMatchClicksUntil;
+
+    /// <summary>True while OnSelectedMapChanged is subscribed on the session.</summary>
     private bool _subscribedToSession;
 
+    /// <summary>Builds default UI, loads catalog, and wires button listeners.</summary>
     private void Awake()
     {
-        // Ensure essential UI components exist in the scene for both authored and generated UI
+        // Ensure menu scenes have camera, EventSystem, and optional generated canvas.
         MultiplayerUiRuntimeBuilder.EnsureSceneCamera();
         MultiplayerUiRuntimeBuilder.EnsureEventSystem();
 
-        // If the player count label is not assigned, we assume the entire UI needs to be generated
         if (_generateDefaultUiIfEmpty && _playerCountLabel == null)
             MultiplayerUiRuntimeBuilder.BuildLobby(this);
 
-        // If a session reference isn't assigned, attempt to find one in the scene
         if (_session == null)
             _session = FindAnyObjectByType<NetworkSessionController>();
 
@@ -63,29 +65,30 @@ public sealed class LobbyUI : MonoBehaviour
         WireListenersOnce();
     }
 
+    /// <summary>Subscribes to map changes and clears UI focus after enable.</summary>
     private void OnEnable()
     {
         SubscribeToSession();
         RefreshMapLabel();
-        // On scene load, InputSystemUIInputModule can dispatch an initial Submit
-        // If a button is selected, that Submit can invoke onClick. Debounce and clear selection
         _ignoreStartMatchClicksUntil = Time.unscaledTime + 0.25f;
         if (EventSystem.current != null)
             EventSystem.current.SetSelectedGameObject(null);
     }
 
+    /// <summary>Unsubscribes from session map events.</summary>
     private void OnDisable()
     {
         UnsubscribeFromSession();
     }
 
+    /// <summary>Refreshes player count and host-only control interactability each frame.</summary>
     private void Update()
     {
         UpdatePlayerCount();
         UpdateHostButtons();
     }
 
-    // Used by MultiplayerUiRuntimeBuilder for default lobby layout
+    /// <summary>Wires runtime-generated UI references from <see cref="MultiplayerUiRuntimeBuilder"/>.</summary>
     public void ApplyRuntimeReferences(Text playerCount, Text mapLabel, Button mapNext, Button startMatch, Button leave)
     {
         _playerCountLabel = playerCount;
@@ -95,14 +98,13 @@ public sealed class LobbyUI : MonoBehaviour
         _leaveButton = leave;
     }
 
+    /// <summary>Registers onClick handlers for lobby buttons (idempotent).</summary>
     private void WireListenersOnce()
     {
-        // Prevent double-wiring if ApplyRuntimeReferences is called multiple times
         if (_wired)
             return;
         _wired = true;
 
-        // Wire up button listeners for map cycling, starting the match, and leaving the lobby
         if (_startMatchButton != null)
             _startMatchButton.onClick.AddListener(OnStartMatchClicked);
 
@@ -113,6 +115,7 @@ public sealed class LobbyUI : MonoBehaviour
             _mapNextButton.onClick.AddListener(OnMapNextClicked);
     }
 
+    /// <summary>Subscribes to NetworkSessionController map selection updates.</summary>
     private void SubscribeToSession()
     {
         if (_session == null)
@@ -124,6 +127,7 @@ public sealed class LobbyUI : MonoBehaviour
         _subscribedToSession = true;
     }
 
+    /// <summary>Unsubscribes from session map selection updates.</summary>
     private void UnsubscribeFromSession()
     {
         if (_session == null || !_subscribedToSession)
@@ -133,11 +137,13 @@ public sealed class LobbyUI : MonoBehaviour
         _subscribedToSession = false;
     }
 
+    /// <summary>Refreshes the map label when the host changes selection.</summary>
     private void OnSelectedMapChanged(string sceneName)
     {
         RefreshMapLabel();
     }
 
+    /// <summary>Sets map label text from catalog display name or scene name.</summary>
     private void RefreshMapLabel()
     {
         if (_mapLabel == null)
@@ -151,9 +157,6 @@ public sealed class LobbyUI : MonoBehaviour
 
         string sceneName = _session != null ? _session.SelectedMapSceneName : string.Empty;
 
-        // Fall back to the first catalog entry for display purposes only - this
-        // doesn't change the session's selection, just keeps the UI from
-        // showing a blank value before the host has picked anything
         if (string.IsNullOrEmpty(sceneName) && _catalog.TryGetByIndex(0, out MapCatalog.MapEntry first))
             sceneName = first.sceneName;
 
@@ -163,15 +166,16 @@ public sealed class LobbyUI : MonoBehaviour
             _mapLabel.text = $"Map: {sceneName}";
     }
 
+    /// <summary>Host cycles to the next map in MapCatalog and requests sync.</summary>
     private void OnMapNextClicked()
     {
         if (_session == null || _catalog == null || _catalog.Count == 0)
             return;
 
-        // Non-host clients shouldn't get here (UI gates it), but guard anyway.
         if (!IsHost())
             return;
 
+        // Advance circularly through catalog entries by scene name index.
         string currentScene = _session.SelectedMapSceneName;
         int currentIndex = -1;
         if (!string.IsNullOrEmpty(currentScene))
@@ -182,13 +186,12 @@ public sealed class LobbyUI : MonoBehaviour
             _session.RequestMapChange(nextEntry.sceneName);
     }
 
+    /// <summary>Updates the player count label from server client list size.</summary>
     private void UpdatePlayerCount()
     {
         if (_playerCountLabel == null)
             return;
 
-        // If the NetworkManager isn't active, display a placeholder
-        // Otherwise, show the current number of connected clients out of a maximum of 8
         NetworkManager nm = FindAnyObjectByType<NetworkManager>();
         if (nm == null || !nm.IsServerStarted)
         {
@@ -200,38 +203,36 @@ public sealed class LobbyUI : MonoBehaviour
         _playerCountLabel.text = $"Players: {count} / 8";
     }
 
+    /// <summary>Enables Start Match and Next Map only for the host.</summary>
     private void UpdateHostButtons()
     {
         bool host = IsHost();
 
-        // Only the host can start the match; the lobby is host-driven
         if (_startMatchButton != null)
             _startMatchButton.interactable = host;
 
-        // Only the host can cycle maps, and only when there's more than one
-        // choice. Non-host clients see the label update via the broadcast but
-        // cannot change the selection themselves
         if (_mapNextButton != null)
             _mapNextButton.interactable = host && _catalog != null && _catalog.Count > 1;
     }
 
+    /// <summary>True when this machine is running FishNet as host.</summary>
     private static bool IsHost()
     {
         NetworkManager nm = FindAnyObjectByType<NetworkManager>();
         return nm != null && nm.IsHostStarted;
     }
 
+    /// <summary>Host loads the selected gameplay map via the session controller.</summary>
     private void OnStartMatchClicked()
     {
-        // In this simple implementation, the host can start the match once ready, which triggers a global scene load for all clients
         if (Time.unscaledTime < _ignoreStartMatchClicksUntil)
             return;
         _session?.StartMatchFromLobby();
     }
 
+    /// <summary>Disconnects networking and returns to the main menu scene.</summary>
     private void OnLeaveClicked()
     {
-        // Disconnect from the session and return to the main menu scene
         _session?.DisconnectAndReturnToMainMenu();
     }
 }

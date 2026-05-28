@@ -6,10 +6,9 @@ using FishNet.Transporting;
 using UnityEngine;
 using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 
-// Enables player input and view only for the owning client
-// Replicates root transform to other clients
-// Movement is local-only on the owner
-// There is no NetworkTransform on the prefab
+/// <summary>
+/// Owner-only input and camera; replicates root transform to remote clients without NetworkTransform.
+/// </summary>
 [DefaultExecutionOrder(-50)]
 public sealed class PlayerLocalControls : NetworkBehaviour
 {
@@ -17,6 +16,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
 
     private const int MaxRemoteSamples = 32;
 
+    /// <summary>Next Time.time when the owner may send a transform RPC.</summary>
     private float _nextTransformRpcTime;
 
     [SerializeField]
@@ -32,10 +32,10 @@ public sealed class PlayerLocalControls : NetworkBehaviour
     [Min(0f)]
     private float _remoteMaxExtrapolationSeconds = 0.08f;
 
+    /// <summary>Time-stamped poses for remote client interpolation.</summary>
     private readonly List<RemoteTransformSample> _remoteSamples = new(16);
 
-    // Last staging flag for owner movement and camera toggles
-    // Null means not yet synced this session
+    /// <summary>Last lobby/menu staging flag used to toggle owner components.</summary>
     private bool? _lastOwnerStagingForComponents;
 
     private readonly SyncVar<Vector3> _replicatedPos = new(
@@ -46,21 +46,19 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         Quaternion.identity,
         new SyncTypeSettings(WritePermission.ServerOnly, ReadPermission.Observers, 1f / 20f, Channel.Unreliable));
 
-    // Server-assigned match folder id for local photo roll paths
     private readonly SyncVar<string> _matchPhotoRollId = new(
         string.Empty,
         new SyncTypeSettings(WritePermission.ServerOnly, ReadPermission.Observers, 0f, Channel.Reliable));
 
+    /// <summary>True for lobby or main menu scene names.</summary>
     private static bool IsLobbyOrMainMenuName(string sceneName)
     {
         return sceneName == NetworkSceneFlow.Lobby || sceneName == NetworkSceneFlow.MainMenu;
     }
 
+    /// <summary>True when the player is in lobby/menu rather than a gameplay map.</summary>
     private bool IsStagingOrMenuScene()
     {
-        // When the active scene is any gameplay map (not lobby / main menu),
-        // we're in-match - controls should be enabled. This used to hard-code
-        // "World" but the lobby can now load any map listed in the MapCatalog
         string active = UnitySceneManager.GetActiveScene().name;
         if (NetworkSceneFlow.IsGameplayScene(active))
             return false;
@@ -72,8 +70,6 @@ public sealed class PlayerLocalControls : NetworkBehaviour
     public override void OnStartServer()
     {
         base.OnStartServer();
-        // Match spawn pose so observers are correct
-        // Before the first owner LateUpdate or Rpc
         _replicatedPos.Value = transform.position;
         _replicatedRot.Value = transform.rotation;
 
@@ -106,8 +102,6 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             foreach (AudioListener listener in GetComponentsInChildren<AudioListener>(true))
                 listener.enabled = false;
 
-            // Remote proxies use replicated transform
-            // CharacterController would fight Teleport or set
             if (TryGetComponent(out CharacterController characterController))
                 characterController.enabled = false;
 
@@ -124,6 +118,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         base.OnStopClient();
     }
 
+    /// <summary>Adds PlayerHardBody and PlayerInventoryController when a CharacterController exists.</summary>
     private void EnsureHardBodyPresent()
     {
         if (!TryGetComponent(out CharacterController _))
@@ -131,12 +126,11 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         if (!TryGetComponent(out PlayerHardBody _))
             gameObject.AddComponent<PlayerHardBody>();
 
-        // Ensure inventory controller exists on spawned player instances
-        // Without this, hotbar selection input won't run (C/1-4)
         if (!TryGetComponent(out PlayerInventoryController _))
             gameObject.AddComponent<PlayerInventoryController>();
     }
 
+    /// <summary>Applies replicated match photo roll id on clients.</summary>
     private void OnMatchPhotoRollIdChanged(string previous, string next, bool asServer)
     {
         if (asServer)
@@ -144,6 +138,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         PhotoRollSession.ApplyReplicatedMatchId(next);
     }
 
+    /// <summary>Owner-only: toggles gameplay vs staging component and cursor state.</summary>
     private void Update()
     {
         if (!IsClientStarted || !IsOwner)
@@ -152,10 +147,12 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         RefreshOwnerStagingPresentation(forceComponents: false);
     }
 
+    /// <summary>Enables movement/HUD/camera on gameplay scenes; frees cursor in lobby/menu.</summary>
     private void RefreshOwnerStagingPresentation(bool forceComponents)
     {
         bool staging = IsStagingOrMenuScene();
 
+        // Toggle owner-only gameplay scripts when crossing lobby vs map.
         if (forceComponents || !_lastOwnerStagingForComponents.HasValue || _lastOwnerStagingForComponents.Value != staging)
         {
             bool gameplay = !staging;
@@ -188,6 +185,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         }
     }
 
+    /// <summary>Owner sends transform RPCs; remotes apply buffered interpolation.</summary>
     private void LateUpdate()
     {
         if (!IsClientStarted)
@@ -202,9 +200,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         if (IsStagingOrMenuScene())
             return;
 
-        // Listen-only host with no remote observers
-        // Skip RPC and SyncVar churn
-        // Avoids fighting CharacterController
+        // Solo host: skip RPC when no remote observers.
         if (NetworkManager != null && NetworkManager.IsHostStarted &&
             NetworkManager.ServerManager != null &&
             NetworkManager.ServerManager.Clients.Count <= 1)
@@ -217,6 +213,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         RpcSubmitTransform(transform.position, transform.rotation);
     }
 
+    /// <summary>Owner to server: writes replicated position and rotation SyncVars.</summary>
     [ServerRpc(RequireOwnership = true)]
     private void RpcSubmitTransform(Vector3 position, Quaternion rotation)
     {
@@ -224,19 +221,20 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         _replicatedRot.Value = rotation;
     }
 
+    /// <summary>SyncVar hook: forwards position changes to transform and remote buffer logic.</summary>
     private void OnReplicatedPosChanged(Vector3 previous, Vector3 next, bool asServer) =>
         OnReplicatedTransformChanged(asServer);
 
+    /// <summary>SyncVar hook: forwards rotation changes to transform and remote buffer logic.</summary>
     private void OnReplicatedRotChanged(Quaternion previous, Quaternion next, bool asServer) =>
         OnReplicatedTransformChanged(asServer);
 
+    /// <summary>Server snaps transform; clients append samples for interpolation.</summary>
     private void OnReplicatedTransformChanged(bool asServer)
     {
         if (IsOwner)
             return;
 
-        // Keep server instance aligned with last authoritative sample
-        // Covers hits and triggers
         if (asServer && IsServerStarted)
             transform.SetPositionAndRotation(_replicatedPos.Value, _replicatedRot.Value);
 
@@ -244,6 +242,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             TryAppendRemoteSample(Time.time, _replicatedPos.Value, _replicatedRot.Value);
     }
 
+    /// <summary>Duplicates the current SyncVar pose so interpolation has two samples.</summary>
     private void SeedRemoteInterpolationBuffer()
     {
         _remoteSamples.Clear();
@@ -254,6 +253,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         _remoteSamples.Add(new RemoteTransformSample(t, p, r));
     }
 
+    /// <summary>Adds a remote sample when pose or time changed meaningfully.</summary>
     private void TryAppendRemoteSample(float time, Vector3 position, Quaternion rotation)
     {
         if (_remoteSamples.Count > 0)
@@ -272,15 +272,19 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             _remoteSamples.RemoveAt(0);
     }
 
+    /// <summary>Drops old remote samples while keeping at least two for interpolation.</summary>
     private void PruneRemoteSamplesBefore(float minTime)
     {
         while (_remoteSamples.Count > 2 && _remoteSamples[1].Time < minTime)
             _remoteSamples.RemoveAt(0);
     }
 
+    /// <summary>Lerps or extrapolates remote transform from the sample buffer at render time.</summary>
     private void ApplyRemoteInterpolation()
     {
         float renderTime = Time.time - Mathf.Max(0f, _remoteInterpolationDelaySeconds);
+
+        // Fall back to latest SyncVars when the buffer is empty or too small.
 
         if (_remoteSamples.Count == 0)
         {
@@ -295,8 +299,6 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             return;
         }
 
-        // If every sample is still in the future relative to the playhead
-        // Hold the oldest
         if (renderTime <= _remoteSamples[0].Time)
         {
             RemoteTransformSample s = _remoteSamples[0];
@@ -310,6 +312,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             Vector3 pos = newest.Position;
             Quaternion rot = newest.Rotation;
 
+            // Optional short extrapolation past the newest sample using recent velocity.
             if (_remoteVelocityExtrapolationBlend > 0f &&
                 _remoteSamples.Count >= 2 &&
                 _remoteMaxExtrapolationSeconds > 0f)
@@ -328,6 +331,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
             return;
         }
 
+        // Find bracketing samples and lerp between them at renderTime.
         int a = 0;
         for (int i = _remoteSamples.Count - 1; i >= 0; i--)
         {
@@ -347,6 +351,7 @@ public sealed class PlayerLocalControls : NetworkBehaviour
         transform.SetPositionAndRotation(lerpedPos, lerpedRot);
     }
 
+    /// <summary>Single timestamped pose for remote player interpolation.</summary>
     private readonly struct RemoteTransformSample
     {
         public readonly float Time;

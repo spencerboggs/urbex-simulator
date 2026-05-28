@@ -1,9 +1,8 @@
 using UnityEngine;
 
-// Standard hinged door. A thin "hinge" transform sits at the pivot edge and the
-// visual door mesh is parented underneath it so rotating the hinge swings the door.
-// One-way: the configured open angle defines the swing direction; the door only
-// ever interpolates between closed and that angle, never past either end
+/// <summary>
+/// Hinged door that rotates a pivot transform between closed and open local Euler angles.
+/// </summary>
 [AddComponentMenu("Interaction/Doors/Hinged Door")]
 public sealed class HingedDoor : DoorBase
 {
@@ -23,10 +22,7 @@ public sealed class HingedDoor : DoorBase
     protected override void Awake()
     {
         if (_hinge == null)
-        {
-            // Allow the script to be placed directly on the hinge object too.
             _hinge = transform;
-        }
         base.Awake();
     }
 
@@ -35,16 +31,13 @@ public sealed class HingedDoor : DoorBase
         if (_hinge == null)
             return;
 
-        // Quaternion.Slerp gives a smooth, gimbal-safe interpolation between the
-        // two configured Euler poses. Progress is already clamped by DoorBase, so
-        // we can't overshoot the endpoints.
+        // Slerp between authored closed and open local rotations for smooth swing motion.
         Quaternion closed = Quaternion.Euler(_closedLocalEuler);
         Quaternion open = Quaternion.Euler(_openLocalEuler);
         _hinge.localRotation = Quaternion.Slerp(closed, open, progress01);
     }
 
-    // Snap to the closed pose immediately in the editor when the inspector changes
-    // so designers can preview the closed/open angles without entering play mode.
+    /// <summary>Previews hinge rotation in the editor when closed/open angles or initial state change.</summary>
     private void OnValidate()
     {
         if (_hinge == null || !Application.isEditor || Application.isPlaying)

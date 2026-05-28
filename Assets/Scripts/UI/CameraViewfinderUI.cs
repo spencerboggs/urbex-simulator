@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+/// <summary>UI Toolkit viewfinder overlay for handheld camera mode.</summary>
 [DisallowMultipleComponent]
 public sealed class CameraViewfinderUI : MonoBehaviour
 {
@@ -13,27 +14,49 @@ public sealed class CameraViewfinderUI : MonoBehaviour
     [SerializeField]
     private VisualTreeAsset _viewfinderUxmlFallback;
 
+    /// <summary>Sibling UIDocument on this GameObject.</summary>
     private UIDocument _document;
+
+    /// <summary>Date/time stamp in the viewfinder corner.</summary>
     private Label _stampLabel;
+
+    /// <summary>Full-screen white flash on capture.</summary>
     private VisualElement _shutterFlash;
+
+    /// <summary>Saved path toast container.</summary>
     private VisualElement _savedToast;
+
+    /// <summary>Absolute path text inside the saved toast.</summary>
     private Label _savedToastPath;
+
+    /// <summary>Capture control hint label.</summary>
     private Label _hintCapture;
+
+    /// <summary>Stow camera hint label.</summary>
     private Label _hintExit;
+
+    /// <summary>Zoom bar fill width driven by normalized zoom.</summary>
     private VisualElement _zoomFill;
+
+    /// <summary>Scheduled task that updates the date stamp periodically.</summary>
     private IVisualElementScheduledItem _tickSchedule;
+
+    /// <summary>Unscaled time when the saved toast should hide.</summary>
     private float _toastHideTime;
+
+    /// <summary>Running shutter flash fade coroutine, if any.</summary>
     private Coroutine _shutterFlashRoutine;
 
+    /// <summary>Caches the UIDocument reference.</summary>
     private void Awake()
     {
         _document = GetComponent<UIDocument>();
     }
 
+    /// <summary>Binds UXML, applies fallback asset, and starts stamp scheduling.</summary>
     private void OnEnable()
     {
-        // Recover from broken/half-imported visualTreeAsset references on the
-        // sibling UIDocument by re-assigning the inspector-provided fallback
+        // Recover when the assigned UXML reference was lost at import time.
         if (_document != null &&
             _document.visualTreeAsset == null &&
             _viewfinderUxmlFallback != null)
@@ -50,8 +73,6 @@ public sealed class CameraViewfinderUI : MonoBehaviour
             return;
         }
 
-        // Belt-and-suspenders: force the panel root to span its parent so children
-        // anchored with insets always have a real-sized box to compute against
         root.style.position = Position.Absolute;
         root.style.left = 0;
         root.style.top = 0;
@@ -62,8 +83,6 @@ public sealed class CameraViewfinderUI : MonoBehaviour
 
         _tickSchedule = root.schedule.Execute(TickStamp).Every(250);
 
-        // If the visual tree wasn't built yet at OnEnable time (UIDocument can
-        // build lazily), retry once on the next frame before warning
         if (root.Q<VisualElement>("viewfinderFrame") == null)
         {
             root.schedule.Execute(() =>
@@ -80,6 +99,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         }
     }
 
+    /// <summary>Queries named visual elements from the viewfinder UXML root.</summary>
     private void BindElements(VisualElement root)
     {
         _stampLabel = root.Q<Label>("stampLabel");
@@ -91,6 +111,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         _zoomFill = root.Q<VisualElement>("zoomFill");
     }
 
+    /// <summary>Logs UXML binding failure details when viewfinderFrame is missing.</summary>
     private void LogMissingFrameDiagnostics(VisualElement root)
     {
         string visibleAssetName = _document != null && _document.visualTreeAsset != null
@@ -107,6 +128,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
             $"Library/ArtifactDB folders in the project root, then reopen Unity to fully rebuild the asset cache.");
     }
 
+    /// <summary>Comma-separated child names for diagnostic logging.</summary>
     private static string DescribeChildren(VisualElement root)
     {
         if (root == null || root.childCount == 0)
@@ -121,6 +143,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         return sb.ToString();
     }
 
+    /// <summary>Pauses stamp schedule and stops shutter flash coroutine.</summary>
     private void OnDisable()
     {
         if (_tickSchedule != null)
@@ -136,6 +159,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         }
     }
 
+    /// <summary>Hides the saved toast after its visibility timeout.</summary>
     private void Update()
     {
         if (_savedToast != null &&
@@ -146,12 +170,14 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         }
     }
 
+    /// <summary>Updates the corner date/time stamp label.</summary>
     private void TickStamp()
     {
         if (_stampLabel != null)
             _stampLabel.text = DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss");
     }
 
+    /// <summary>Updates capture and stow hint labels.</summary>
     public void SetControlHints(string captureText, string stowKeyDisplay)
     {
         if (_hintCapture != null)
@@ -160,7 +186,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
             _hintExit.text = string.IsNullOrEmpty(stowKeyDisplay) ? "Stow camera" : $"{stowKeyDisplay}  Stow";
     }
 
-    // Sets the zoom-bar fill width. 0 = wide (no fill), 1 = full tele
+    /// <summary>Sets zoom bar fill (0 = wide, 1 = tele).</summary>
     public void SetZoomLevel(float normalized)
     {
         if (_zoomFill == null)
@@ -169,6 +195,7 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         _zoomFill.style.width = Length.Percent(t * 100f);
     }
 
+    /// <summary>Plays the shutter flash overlay.</summary>
     public void PlayShutterEffect()
     {
         if (_shutterFlash == null)
@@ -179,16 +206,17 @@ public sealed class CameraViewfinderUI : MonoBehaviour
         _shutterFlashRoutine = StartCoroutine(ShutterFlashRoutine());
     }
 
+    /// <summary>Brief full-opacity flash then fade on the shutter overlay.</summary>
     private IEnumerator ShutterFlashRoutine()
     {
-        // Drive opacity directly via inline style instead of relying on USS
-        // transitions, which can crash Unity 6's style applier
+        // Inline opacity avoids USS transition issues on Unity 6.
         _shutterFlash.style.opacity = 0.92f;
         yield return new WaitForSecondsRealtime(0.05f);
         _shutterFlash.style.opacity = 0f;
         _shutterFlashRoutine = null;
     }
 
+    /// <summary>Shows the saved-path toast for <paramref name="visibleSeconds"/>.</summary>
     public void ShowSavedToast(string absolutePath, float visibleSeconds = 2.2f)
     {
         if (_savedToast == null || _savedToastPath == null)

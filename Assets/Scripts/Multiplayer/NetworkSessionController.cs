@@ -12,6 +12,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 
+/// <summary>
+/// Host/client session lifecycle, transport setup, lobby map sync, and gameplay player spawning.
+/// </summary>
 [DisallowMultipleComponent]
 public sealed class NetworkSessionController : MonoBehaviour
 {
@@ -30,6 +33,7 @@ public sealed class NetworkSessionController : MonoBehaviour
     [Tooltip("If true, StartHost queues a move into the lobby scene once the local client connection is up.")]
     private bool _enterLobbyAfterHost = true;
 
+    /// <summary>True after StartHost until the lobby scene load coroutine runs.</summary>
     private bool _pendingLobbyAfterHost;
 
     [Header("Player Spawn Variation")]
@@ -47,7 +51,7 @@ public sealed class NetworkSessionController : MonoBehaviour
     [SerializeField]
     private bool _spawnTryFindUnblockedSlot = true;
 
-    // 3x3 offsets in a "spiral-ish" order: center first, then around it
+    /// <summary>3x3 spawn slot offsets around the prefab origin (center first).</summary>
     private static readonly Vector2Int[] SpawnGridOffsets =
     {
         new(0, 0),
@@ -61,8 +65,10 @@ public sealed class NetworkSessionController : MonoBehaviour
         new(-1, -1),
     };
 
+    /// <summary>Resolves NetworkManager, transport, player prefab, and default map.</summary>
     private void Awake()
     {
+        // Wire NetworkManager and gameplay prefab before any connection starts.
         if (_networkManager == null)
             _networkManager = GetComponent<NetworkManager>();
         if (_networkManager == null)
@@ -79,6 +85,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         EnsureDefaultMapSelection();
     }
 
+    /// <summary>Subscribes to FishNet client, scene, server, and map broadcast events.</summary>
     private void OnEnable()
     {
         if (_networkManager == null)
@@ -87,15 +94,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.ClientManager.OnClientConnectionState += OnClientConnectionState;
         _networkManager.SceneManager.OnLoadEnd += OnFishNetSceneLoadEnd;
 
-        // Lobby map selection sync. Broadcasts work without a NetworkBehaviour, so
-        // we can register these regardless of whether server/client is started yet
-        // - FishNet routes them once a connection comes up. Server is the source
-        // of truth for the selection; clients only listen
         _networkManager.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
         _networkManager.ServerManager.RegisterBroadcast<RequestMapSelectionBroadcast>(OnServerReceivedMapRequest);
         _networkManager.ClientManager.RegisterBroadcast<MapSelectionBroadcast>(OnClientReceivedMapSelection);
     }
 
+    /// <summary>Unsubscribes from FishNet events registered in OnEnable.</summary>
     private void OnDisable()
     {
         if (_networkManager == null)
@@ -109,24 +113,21 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.ClientManager.UnregisterBroadcast<MapSelectionBroadcast>(OnClientReceivedMapSelection);
     }
 
-    // Currently selected gameplay map (the scene name without .unity, matching
-    // MapCatalog entries). Authoritative on the server; replicated to clients via
-    // MapSelectionBroadcast. Stored even outside of the lobby so the host can pick
-    // a map in the main menu flow in the future if desired
+    /// <summary>Host-authoritative gameplay scene name from MapCatalog.</summary>
     private string _selectedMapSceneName = string.Empty;
 
+    /// <summary>Server-authoritative selected gameplay scene name (MapCatalog entry).</summary>
     public string SelectedMapSceneName => _selectedMapSceneName;
 
-    // Fired whenever _selectedMapSceneName changes (both on the host after a host
-    // change, and on remote clients when the server pushes an update). LobbyUI
-    // subscribes to refresh its label without polling
+    /// <summary>Raised when the selected map changes on host or clients.</summary>
     public event Action<string> OnSelectedMapChanged;
 
-    // Last join value synced with the main menu join field. With FishySteamworks this is the host's
-    // Steam ID (steamId64). For non-Steam transports (local dev) this may be a hostname, IP, or host:port
+    /// <summary>
+    /// Last join target (Steam ID for FishySteamworks, or host/IP:port for IP transports).
+    /// </summary>
     public string DefaultJoinTarget { get; set; } = string.Empty;
 
-    // Apply transport limits so the lobby capacity matches FishNet server settings
+    /// <summary>Applies <see cref="_maxPlayers"/> to the active transport.</summary>
     public void ApplyMaxPlayersToTransport()
     {
         if (_networkManager == null)
@@ -134,7 +135,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.TransportManager.Transport.SetMaximumClients(_maxPlayers);
     }
 
-    // Sets the transport client target and remembers it for the join UI (same format as DefaultJoinTarget)
+    /// <summary>Sets the transport client address and updates <see cref="DefaultJoinTarget"/>.</summary>
     public void SetJoinTarget(string joinTarget)
     {
         if (_networkManager == null || string.IsNullOrWhiteSpace(joinTarget))
@@ -143,7 +144,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         DefaultJoinTarget = joinTarget.Trim();
     }
 
-    // Starts server and local client (host), then loads the lobby scene when connections are ready
+    /// <summary>Starts host and optionally loads the lobby when the local client connects.</summary>
     public void StartHost()
     {
         if (_networkManager == null)
@@ -164,13 +165,10 @@ public sealed class NetworkSessionController : MonoBehaviour
             StartCoroutine(LoadLobbyWhenHostReady());
         }
 
-        // Helpful for Steam P2P (host needs an ID to share)
         TryLogLocalSteamId();
     }
 
-    // Starts the FishNet client. Text comes from the join field
-    // Host Steam ID (steamId64) for FishySteamworks,
-    // or hostname / IP / host:port when a non-Steam transport is active
+    /// <summary>Starts the client using join field text or <see cref="DefaultJoinTarget"/>.</summary>
     public void StartClient(string joinFieldText)
     {
         if (_networkManager == null)
@@ -178,6 +176,7 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         ApplyMaxPlayersToTransport();
 
+        // Parse host:port for IP transports; Steam uses steamId64 as the address.
         string input = string.IsNullOrWhiteSpace(joinFieldText) ? DefaultJoinTarget : joinFieldText;
         input = input?.Trim() ?? string.Empty;
 
@@ -216,7 +215,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.ClientManager.StartConnection();
     }
 
-    // Starts only the server (headless / tooling). Does not load scenes automatically
+    /// <summary>Starts server only (no automatic scene load).</summary>
     public void StartServerOnly()
     {
         if (_networkManager == null)
@@ -228,7 +227,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             _networkManager.ServerManager.StartConnection();
     }
 
-    // Stops networking and returns to the main menu scene (offline)
+    /// <summary>Stops networking and loads the main menu offline.</summary>
     public void DisconnectAndReturnToMainMenu()
     {
         if (_networkManager == null)
@@ -245,10 +244,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             UnitySceneManager.LoadScene(NetworkSceneFlow.MainMenu);
     }
 
-    // Server-authoritative transition from lobby to gameplay (call from host UI only).
-    // Loads whichever map the lobby has currently selected. Falls back to the
-    // catalog's first entry, then NetworkSceneFlow.DefaultMap, so a misconfigured
-    // catalog can't soft-lock the host
+    /// <summary>Host-only: loads the selected gameplay map (with catalog fallbacks).</summary>
     public void StartMatchFromLobby()
     {
         if (_networkManager == null || !_networkManager.IsHostStarted)
@@ -264,6 +260,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         NetworkSceneFlow.LoadMap(_networkManager, sceneName, _gameplayPlayerPrefab);
     }
 
+    /// <summary>Returns selected map, first catalog entry, or DefaultMap fallback.</summary>
     private string ResolveStartMatchSceneName()
     {
         if (!string.IsNullOrEmpty(_selectedMapSceneName))
@@ -276,12 +273,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         return NetworkSceneFlow.DefaultMap;
     }
 
-    // Host-side entry point invoked by LobbyUI when the user clicks "Next Map".
-    // Validates the requested scene against MapCatalog, applies it locally, and
-    // broadcasts the new selection to every connected client. Non-host clients
-    // should never reach this method (UI gates the button), but if they do we
-    // round-trip the request through the server via RequestMapSelectionBroadcast
-    // so the host stays authoritative
+    /// <summary>Host-validated map change; non-host clients broadcast a request to the server.</summary>
     public void RequestMapChange(string sceneName)
     {
         if (string.IsNullOrEmpty(sceneName) || _networkManager == null)
@@ -300,13 +292,13 @@ public sealed class NetworkSessionController : MonoBehaviour
             return;
         }
 
-        // Non-host client (defensive path). Ask the server to make the change
         if (_networkManager.ClientManager.Started)
         {
             _networkManager.ClientManager.Broadcast(new RequestMapSelectionBroadcast { SceneName = sceneName });
         }
     }
 
+    /// <summary>Sets the first MapCatalog entry when no map was chosen yet.</summary>
     private void EnsureDefaultMapSelection()
     {
         if (!string.IsNullOrEmpty(_selectedMapSceneName))
@@ -320,6 +312,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             _selectedMapSceneName = entry.sceneName;
     }
 
+    /// <summary>True when sceneName exists in MapCatalog or matches the legacy default.</summary>
     private bool IsValidMapForSelection(string sceneName)
     {
         if (string.IsNullOrEmpty(sceneName))
@@ -328,14 +321,13 @@ public sealed class NetworkSessionController : MonoBehaviour
         MapCatalog catalog = MapCatalog.Load();
         if (catalog == null || catalog.Count == 0)
         {
-            // No catalog yet - accept the default map as a fallback so single-map
-            // setups still work before the auto-sync has ever run
             return sceneName == NetworkSceneFlow.DefaultMap;
         }
 
         return catalog.TryGetBySceneName(sceneName, out _, out _);
     }
 
+    /// <summary>Updates local selection and raises OnSelectedMapChanged when changed.</summary>
     private void ApplyMapSelectionLocally(string sceneName)
     {
         if (_selectedMapSceneName == sceneName)
@@ -345,6 +337,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         OnSelectedMapChanged?.Invoke(_selectedMapSceneName);
     }
 
+    /// <summary>Server broadcast of the current lobby map to all clients.</summary>
     private void BroadcastMapSelectionToAll(string sceneName)
     {
         if (_networkManager == null || !_networkManager.IsServerStarted)
@@ -353,16 +346,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.ServerManager.Broadcast(new MapSelectionBroadcast { SceneName = sceneName });
     }
 
-    // Server-side handler for a client-originated map change request. Authority
-    // is enforced here: only the host's local connection may change the map
+    /// <summary>Validates host-only map change requests from the local client connection.</summary>
     private void OnServerReceivedMapRequest(NetworkConnection sender, RequestMapSelectionBroadcast bc, Channel channel)
     {
         if (sender == null)
             return;
 
-        // Only the host (the local client running on the server machine) is
-        // allowed to change the map. Everyone else is ignored - UI shouldn't
-        // even surface the button, but we defend against malformed clients
         if (!sender.IsLocalClient)
         {
             Debug.LogWarning($"[Net] Ignoring map change request from non-host connection {sender.ClientId}.");
@@ -379,21 +368,16 @@ public sealed class NetworkSessionController : MonoBehaviour
         BroadcastMapSelectionToAll(bc.SceneName);
     }
 
+    /// <summary>Applies map selection broadcast from the server on clients.</summary>
     private void OnClientReceivedMapSelection(MapSelectionBroadcast bc, Channel channel)
     {
         if (string.IsNullOrEmpty(bc.SceneName))
             return;
 
-        // In host mode, the server-side ApplyMapSelectionLocally already updated
-        // the value before broadcasting, so this is a no-op (the equality check
-        // inside ApplyMapSelectionLocally suppresses the redundant event). For
-        // remote clients this is the only place the value updates
         ApplyMapSelectionLocally(bc.SceneName);
     }
 
-    // When a new remote client connects, push the current map selection to that
-    // specific connection so late-joiners see the same value as everyone else
-    // without having to ask. Runs server-side only
+    /// <summary>Sends the current map selection to clients as they connect.</summary>
     private void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
     {
         if (conn == null || args.ConnectionState != RemoteConnectionState.Started)
@@ -408,6 +392,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         _networkManager.ServerManager.Broadcast(conn, new MapSelectionBroadcast { SceneName = _selectedMapSceneName });
     }
 
+    /// <summary>Loads the lobby after host client connect when StartHost requested it.</summary>
     private void OnClientConnectionState(ClientConnectionStateArgs args)
     {
         Debug.Log($"[Net] Client connection state: {args.ConnectionState}");
@@ -430,6 +415,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         StartCoroutine(LoadLobbyWhenHostReady());
     }
 
+    /// <summary>Deferred lobby load so server and client are both started.</summary>
     private IEnumerator LoadLobbyWhenHostReady()
     {
         yield return null;
@@ -437,6 +423,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             NetworkSceneFlow.LoadLobby(_networkManager);
     }
 
+    /// <summary>Enables P2P on FishySteamworks and clears localhost join target.</summary>
     private void ConfigureSteamTransportIfPresent()
     {
         if (_networkManager == null || _networkManager.TransportManager == null)
@@ -446,17 +433,16 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (active == null)
             return;
 
-        // FishySteamworks: prefer P2P via Steam relay so clients do not rely on manual port forwarding
         if (!IsSteamTransportActive())
             return;
 
         TrySetBoolField(active, "_peerToPeer", true);
 
-        // Legacy sessions may still have an IP-style placeholder; Steam joins use steamId64 only
         if (DefaultJoinTarget.Equals("localhost", StringComparison.OrdinalIgnoreCase))
             DefaultJoinTarget = string.Empty;
     }
 
+    /// <summary>Logs local steamId64 and seeds DefaultJoinTarget when Steam transport is active.</summary>
     private void TryLogLocalSteamId()
     {
         if (!IsSteamTransportActive())
@@ -469,7 +455,6 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (t == null)
             return;
 
-        // FishySteamworks has a public non-serialized field LocalUserSteamID
         FieldInfo f = t.GetType().GetField("LocalUserSteamID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         if (f == null)
             return;
@@ -478,12 +463,11 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (v is ulong id && id != 0)
         {
             Debug.Log($"[Steam] Local steamId64: {id} (friends can paste this into Join to connect).");
-            // Prefill the join field with this host's ID after StartHost
             DefaultJoinTarget = id.ToString();
         }
     }
 
-    // host:port parsing for Tugboat / IP transports only (FishySteamworks uses a single steamId64 string)
+    /// <summary>Parses host, optional port, IPv6 brackets, and scheme prefixes for IP transports.</summary>
     private static bool TryParseEndpointForIpTransport(string input, out string host, out ushort? port)
     {
         host = null;
@@ -491,9 +475,9 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (string.IsNullOrWhiteSpace(input))
             return false;
 
+        // Strip scheme and path; support [ipv6]:port and host:port.
         string s = input.Trim();
 
-        // Allow users to paste things like "http://1.2.3.4:7770/" or "1.2.3.4:7770"
         int scheme = s.IndexOf("://", StringComparison.Ordinal);
         if (scheme >= 0)
             s = s[(scheme + 3)..];
@@ -501,7 +485,6 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (slash >= 0)
             s = s[..slash];
 
-        // IPv6 may be entered as "[::1]:7770"
         if (s.StartsWith("[", StringComparison.Ordinal))
         {
             int end = s.IndexOf(']');
@@ -530,6 +513,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         return true;
     }
 
+    /// <summary>Sets transport port via reflection when the transport exposes a setter or field.</summary>
     private static void TrySetTransportPort(Transport transport, ushort port)
     {
         if (transport == null)
@@ -539,7 +523,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         {
             Type t = transport.GetType();
 
-            // Common method names across transports
+            // Try common FishNet / Tugboat port setter names first.
             foreach (string methodName in new[] { "SetPort", "SetClientPort", "SetServerPort" })
             {
                 MethodInfo m = t.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -555,7 +539,6 @@ public sealed class NetworkSessionController : MonoBehaviour
                 }
             }
 
-            // Tugboat stores it as a serialized field "_port"
             FieldInfo f = t.GetField("_port", BindingFlags.Instance | BindingFlags.NonPublic);
             if (f != null && (f.FieldType == typeof(ushort) || f.FieldType == typeof(int)))
             {
@@ -570,11 +553,13 @@ public sealed class NetworkSessionController : MonoBehaviour
         }
     }
 
+    /// <summary>Tears down menu UI, resets photo roll, and spawns players after gameplay load.</summary>
     private void OnFishNetSceneLoadEnd(SceneLoadEndEventArgs args)
     {
         if (_networkManager == null)
             return;
 
+        // Classify loaded scenes so we can run lobby vs gameplay hooks.
         bool loadedLobby = false;
         bool loadedGameplay = false;
         for (int i = 0; i < args.LoadedScenes.Length; i++)
@@ -589,13 +574,9 @@ public sealed class NetworkSessionController : MonoBehaviour
                 loadedGameplay = true;
         }
 
-        // FishNet global scene loading doesn't necessarily unload any locally-loaded "offline" scene UI
-        // Ensure MainMenu UI is removed once we transition into Lobby/Gameplay on both host and clients
         if (loadedLobby || loadedGameplay)
             DestroyMainMenuUiIfPresent();
 
-        // Ensure Lobby UI is removed once we enter gameplay
-        // If scenes are loaded globally/additively, the lobby canvas can otherwise persist
         if (loadedGameplay)
             DestroyLobbyUiIfPresent();
 
@@ -608,11 +589,10 @@ public sealed class NetworkSessionController : MonoBehaviour
         if (!loadedGameplay)
             return;
 
-        // Spawning is server-authoritative
         if (!_networkManager.IsServerStarted || _gameplayPlayerPrefab == null)
             return;
 
-        // Deterministic iteration so spawn slot assignment is stable
+        // Spawn one gameplay player per connection that does not already own one.
         List<NetworkConnection> conns = new(_networkManager.ServerManager.Clients.Values);
         conns.Sort((a, b) => a.ClientId.CompareTo(b.ClientId));
 
@@ -628,8 +608,6 @@ public sealed class NetworkSessionController : MonoBehaviour
                 if (nob == null || !nob.IsSpawned)
                     continue;
 
-                // Only treat an owned "player" as satisfied
-                // Connections may own other objects (especially host)
                 if (nob.TryGetComponent(out PlayerLocalControls _))
                 {
                     hasSpawnedOwned = true;
@@ -650,6 +628,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         }
     }
 
+    /// <summary>Picks a grid slot with optional jitter and overlap checks for the given client.</summary>
     private Vector3 GetVariedSpawnPosition(Vector3 basePos, Quaternion baseRot, int clientId, int preferredSlot, NetworkObject prefab)
     {
         Vector3 right = baseRot * Vector3.right;
@@ -677,10 +656,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         return basePos + (right * _spawnGridSpacing) + GetDeterministicJitter(clientId, startSlot) * _spawnJitterRadius;
     }
 
+    /// <summary>Stable unit XZ jitter from client id and slot index (no random per frame).</summary>
     private static Vector3 GetDeterministicJitter(int clientId, int salt)
     {
         unchecked
         {
+            // Hash client and slot into a reproducible direction on the XZ plane.
             uint x = (uint)(clientId * 73856093) ^ (uint)(salt * 19349663) ^ 0x9E3779B9u;
             x ^= x >> 16;
             x *= 2246822519u;
@@ -699,6 +680,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         }
     }
 
+    /// <summary>Capsule overlap test at candidate using the prefab CharacterController size.</summary>
     private bool IsSpawnCandidateClear(Vector3 position, NetworkObject prefab)
     {
         float radius = 0.5f;
@@ -723,15 +705,16 @@ public sealed class NetworkSessionController : MonoBehaviour
         return !blocked;
     }
 
+    /// <summary>Non-negative modulo for spawn grid indexing.</summary>
     private static int Mod(int value, int m)
     {
         int r = value % m;
         return r < 0 ? r + m : r;
     }
 
+    /// <summary>Removes runtime or authored main menu objects after scene transition.</summary>
     private static void DestroyMainMenuUiIfPresent()
     {
-        // Generated UI uses these names; authored UI might differ, so we also remove known controller scripts
         GameObject canvas = GameObject.Find("MainMenuCanvas");
         if (canvas != null)
             Destroy(canvas);
@@ -745,6 +728,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             Destroy(ui.gameObject);
     }
 
+    /// <summary>Removes runtime or authored lobby UI when entering gameplay.</summary>
     private static void DestroyLobbyUiIfPresent()
     {
         GameObject canvas = GameObject.Find("LobbyCanvas");
@@ -756,6 +740,7 @@ public sealed class NetworkSessionController : MonoBehaviour
             Destroy(ui.gameObject);
     }
 
+    /// <summary>True when the active transport type name suggests Steam / FishySteamworks.</summary>
     private bool IsSteamTransportActive()
     {
         if (_networkManager == null || _networkManager.TransportManager == null)
@@ -767,6 +752,7 @@ public sealed class NetworkSessionController : MonoBehaviour
                || fullName.IndexOf("Steam", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
+    /// <summary>Sets a bool field on transport via reflection when present.</summary>
     private static void TrySetBoolField(object obj, string fieldName, bool value)
     {
         if (obj == null || string.IsNullOrWhiteSpace(fieldName))
@@ -779,13 +765,12 @@ public sealed class NetworkSessionController : MonoBehaviour
         f.SetValue(obj, value);
     }
 
+    /// <summary>Selects FishySteamworks as the active transport when attached on this object.</summary>
     private void PreferSteamTransportIfPresent()
     {
         if (_networkManager == null || _networkManager.TransportManager == null)
             return;
 
-        // FishySteamworks is added as a Transport component on the same GameObject as NetworkManager
-        // We use reflection to stay resilient if the transport isn't installed in some dev environments
         Transport[] transports = GetComponents<Transport>();
         if (transports == null || transports.Length == 0)
             return;
@@ -808,6 +793,7 @@ public sealed class NetworkSessionController : MonoBehaviour
         TrySetActiveTransport(_networkManager.TransportManager, steamCandidate);
     }
 
+    /// <summary>Assigns Transport on TransportManager via property or known field names.</summary>
     private static void TrySetActiveTransport(object transportManager, Transport transport)
     {
         if (transportManager == null || transport == null)
@@ -815,7 +801,6 @@ public sealed class NetworkSessionController : MonoBehaviour
 
         Type tmType = transportManager.GetType();
 
-        // Try property first
         PropertyInfo transportProp = tmType.GetProperty("Transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         if (transportProp != null && transportProp.CanWrite && transportProp.PropertyType.IsAssignableFrom(transport.GetType()))
         {
@@ -824,7 +809,6 @@ public sealed class NetworkSessionController : MonoBehaviour
             return;
         }
 
-        // Then try a field
         FieldInfo transportField = tmType.GetField("Transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                                    ?? tmType.GetField("_transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                                    ?? tmType.GetField("transport", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);

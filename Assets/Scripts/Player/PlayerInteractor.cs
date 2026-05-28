@@ -1,23 +1,12 @@
 using UnityEngine;
 
-// Single source of truth for the Interact key on the player. Replaces the per-frame
-// E-key polling that used to live inside PlayerInventoryController. Both world
-// pickups and IInteractable targets (doors, future switches/lockers/etc.) share the
-// same bind through this component
-//
-// Each frame:
-//   1. Cast a ray from the gameplay camera forward up to _interactionRange.
-//   2. Walk hits in distance order until we find the first one that resolves to
-//      either a WorldInventoryItem (pickup target) or an IInteractable (interact
-//      target). Whichever is closer wins.
-//   3. Drive the HUD context hint based on the focused target. If nothing is in
-//      front but the inventory can offer a "drop" prompt, show that instead.
-//   4. On Interact-keybind press, dispatch:
-//        - WorldInventoryItem -> PlayerInventoryController.RequestPickup
-//        - IInteractable      -> interactable.Interact(transform)
-//
-// PlayerInteractor expects to live on the same GameObject as PlayerInventoryController
-// (so it can co-locate references) and a Camera should be a child of the player
+/// <summary>
+/// Raycasts from the gameplay camera to focus world pickups and <see cref="IInteractable"/> targets,
+/// drives context hints, and dispatches interact input to inventory or interactables.
+/// </summary>
+/// <remarks>
+/// Expects the same GameObject as <see cref="PlayerInventoryController"/> and a child gameplay camera.
+/// </remarks>
 [RequireComponent(typeof(PlayerInventoryController))]
 [DisallowMultipleComponent]
 public sealed class PlayerInteractor : MonoBehaviour
@@ -32,16 +21,22 @@ public sealed class PlayerInteractor : MonoBehaviour
     [SerializeField]
     private LayerMask _interactionMask = ~0;
 
+    /// <summary>Inventory on the same player; receives pickup requests.</summary>
     private PlayerInventoryController _inventory;
+    /// <summary>HUD used for context hint lines.</summary>
     private PlayerHUDController _hud;
+    /// <summary>Gameplay camera used as ray origin for targeting.</summary>
     private Camera _gameplayCamera;
 
+    /// <summary>World pickup under the current crosshair, if any.</summary>
     private WorldInventoryItem _focusedItem;
+    /// <summary>Interactable under the current crosshair, if no pickup took priority.</summary>
     private IInteractable _focusedInteractable;
 
-    // Cached buffer reused every frame to avoid GC churn.
+    /// <summary>Reused buffer for Physics.RaycastNonAlloc to avoid per-frame allocations.</summary>
     private readonly RaycastHit[] _hitBuffer = new RaycastHit[16];
 
+    /// <summary>Caches player components and gameplay camera.</summary>
     private void Awake()
     {
         _inventory = GetComponent<PlayerInventoryController>();
@@ -49,6 +44,7 @@ public sealed class PlayerInteractor : MonoBehaviour
         _gameplayCamera = GetComponentInChildren<Camera>(true);
     }
 
+    /// <summary>Updates focus and hints each frame; dispatches interact on key press.</summary>
     private void Update()
     {
         if (_inventory == null || !_inventory.IsLocalControllingPlayer())
@@ -60,9 +56,7 @@ public sealed class PlayerInteractor : MonoBehaviour
         if (!KeybindManager.WasPressedThisFrame(KeybindAction.Interact))
             return;
 
-        // Items take priority over generic interactables when both resolve from the
-        // same hit - the inventory pipeline is more specific and matches the
-        // previous behaviour of the E key.
+        // Pickups take priority over generic interactables on the same hit.
         if (_focusedItem != null)
         {
             _inventory.RequestPickup(_focusedItem);
@@ -75,6 +69,7 @@ public sealed class PlayerInteractor : MonoBehaviour
         }
     }
 
+    /// <summary>Raycasts from the camera and sets focused pickup or interactable.</summary>
     private void UpdateFocusedTarget()
     {
         _focusedItem = null;
@@ -99,7 +94,7 @@ public sealed class PlayerInteractor : MonoBehaviour
         if (hitCount <= 0)
             return;
 
-        // Sort just the slice we used. Bubble sort is fine - buffer is tiny.
+        // Sort hits by distance so nearest valid target wins.
         for (int i = 1; i < hitCount; i++)
         {
             for (int j = i; j > 0 && _hitBuffer[j].distance < _hitBuffer[j - 1].distance; j--)
@@ -108,6 +103,7 @@ public sealed class PlayerInteractor : MonoBehaviour
             }
         }
 
+        // Walk sorted hits: pickups first, then interactables.
         for (int i = 0; i < hitCount; i++)
         {
             RaycastHit hit = _hitBuffer[i];
@@ -131,11 +127,13 @@ public sealed class PlayerInteractor : MonoBehaviour
         }
     }
 
+    /// <summary>Pushes pickup or interact prompt text to the HUD context hint line.</summary>
     private void UpdateContextHint()
     {
         if (_hud == null || !_inventory.ShouldPublishHud())
             return;
 
+        // Pickup hint: pick up or no empty slot.
         if (_focusedItem != null)
         {
             string itemName = InventoryItemCatalog.GetDisplayName(_focusedItem.ItemType);
@@ -156,6 +154,7 @@ public sealed class PlayerInteractor : MonoBehaviour
             return;
         }
 
+        // Interactable prompt from IInteractable when no pickup is focused.
         if (_focusedInteractable != null)
         {
             string prompt = _focusedInteractable.GetInteractionPrompt();

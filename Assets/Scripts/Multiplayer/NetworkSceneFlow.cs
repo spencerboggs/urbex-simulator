@@ -4,17 +4,19 @@ using FishNet.Managing.Scened;
 using FishNet.Object;
 using UnityEngine;
 
+/// <summary>FishNet global scene load helpers for menu, lobby, and gameplay maps.</summary>
 public static class NetworkSceneFlow
 {
+    /// <summary>Main menu scene name.</summary>
     public const string MainMenu = "MainMenu";
+
+    /// <summary>Lobby scene name.</summary>
     public const string Lobby = "Lobby";
 
-    // Default map used when a session has no selection yet (e.g. legacy code paths
-    // calling LoadWorld). Kept for back-compat; new code should always go through
-    // LoadMap with a name resolved from the MapCatalog
+    /// <summary>Legacy default gameplay map when no catalog selection exists.</summary>
     public const string DefaultMap = "World";
 
-    // Loads the lobby for every connection and future joiners (global scene)
+    /// <summary>Loads the lobby for all connections, replacing existing global scenes.</summary>
     public static void LoadLobby(NetworkManager networkManager)
     {
         if (networkManager == null || !networkManager.IsServerStarted)
@@ -27,13 +29,10 @@ public static class NetworkSceneFlow
         networkManager.SceneManager.LoadGlobalScenes(data);
     }
 
-    // Host-only progression into a specific gameplay map. Assigns the player
-    // prefab on PlayerSpawner (if provided) so spawning works for late-joiners
-    // too, then global-loads the scene so all connected clients receive it
-    //
-    // Caller must guarantee `sceneName` is in EditorBuildSettings - for runtime
-    // safety, code that picks the map should resolve it via MapCatalog (which is
-    // kept in sync with the build settings by MapCatalogAutoSync)
+    /// <summary>
+    /// Host-only load of a gameplay map. Assigns the player prefab on <see cref="PlayerSpawner"/> when provided.
+    /// <paramref name="sceneName"/> must be in EditorBuildSettings (kept in sync via MapCatalogAutoSync).
+    /// </summary>
     public static void LoadMap(NetworkManager networkManager, string sceneName, NetworkObject playerPrefab)
     {
         if (networkManager == null || !networkManager.IsServerStarted)
@@ -55,16 +54,13 @@ public static class NetworkSceneFlow
         networkManager.SceneManager.LoadGlobalScenes(data);
     }
 
-    // Legacy shim - equivalent to LoadMap with the DefaultMap scene. Existing
-    // callers that haven't migrated to selecting a specific map keep working
+    /// <summary>Loads <see cref="DefaultMap"/> (legacy callers).</summary>
     public static void LoadWorld(NetworkManager networkManager, NetworkObject playerPrefab)
     {
         LoadMap(networkManager, DefaultMap, playerPrefab);
     }
 
-    // Convenience: true for any scene name that represents in-game play (i.e.
-    // not the menu or lobby). Used to recognize gameplay-load completion
-    // regardless of which map was loaded
+    /// <summary>True when <paramref name="sceneName"/> is a gameplay map (not menu or lobby).</summary>
     public static bool IsGameplayScene(string sceneName)
     {
         if (string.IsNullOrEmpty(sceneName)) return false;

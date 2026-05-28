@@ -3,12 +3,18 @@ using FishNet.Object;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>
+/// Hotbar inventory, item selection, drops, and networked pickup sync.
+/// </summary>
 [DisallowMultipleComponent]
 public sealed class PlayerInventoryController : NetworkBehaviour
 {
     private const int MaxHotbarSlots = 5;
+    /// <summary>HUD key labels for hotbar slots 0 through 4.</summary>
     private static readonly string[] SlotKeyLabels = { "C", "1", "2", "3", "4" };
+    /// <summary>Monotonic id generator for server-tracked world drops.</summary>
     private static int s_nextWorldItemId = 1;
+    /// <summary>Server map of replicated world item id to item type for pickup validation.</summary>
     private static readonly Dictionary<int, InventoryItemType> s_serverWorldItems = new();
 
     [Header("Backpack")]
@@ -18,11 +24,11 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     [Header("Slots")]
     [Tooltip("Total slots including camera slot (slot 0).")]
     [SerializeField]
-    private int _slotsWithoutBackpack = 3; // camera + 2
+    private int _slotsWithoutBackpack = 3;
 
     [Tooltip("Total slots including camera slot (slot 0).")]
     [SerializeField]
-    private int _slotsWithBackpack = 5; // camera + 4
+    private int _slotsWithBackpack = 5;
 
     [SerializeField]
     private bool _startWithFlashlight = true;
@@ -48,15 +54,24 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     [Min(0f)]
     private float _dropUpImpulse = 0.8f;
 
+    /// <summary>HUD bridge for hotbar and item key hints.</summary>
     private PlayerHUDController _hudController;
+    /// <summary>Handheld camera mode toggled when slot 0 is selected.</summary>
     private PlayerCameraMode _cameraMode;
+    /// <summary>Held flashlight visual and light toggled when flashlight slot is selected.</summary>
     private PlayerFlashlightMode _flashlightMode;
+    /// <summary>Movement used to sync backpack sprint multiplier.</summary>
     private PlayerMovement _movement;
+    /// <summary>Gameplay camera used as drop spawn origin.</summary>
     private Camera _gameplayCamera;
+    /// <summary>Item type per hotbar slot index.</summary>
     private InventoryItemType[] _slotItems = new InventoryItemType[MaxHotbarSlots];
+    /// <summary>Display names per slot, refreshed before HUD publish.</summary>
     private readonly string[] _slotItemLabels = new string[MaxHotbarSlots];
+    /// <summary>True after default slot contents have been assigned once.</summary>
     private bool _inventoryInitialized;
 
+    /// <summary>Whether the player has a backpack (affects slot count and sprint).</summary>
     public bool HasBackpack
     {
         get => _hasBackpack;
@@ -69,10 +84,13 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         }
     }
 
+    /// <summary>Number of hotbar slots available with the current backpack state.</summary>
     public int AvailableSlots => Mathf.Clamp(_hasBackpack ? _slotsWithBackpack : _slotsWithoutBackpack, 1, MaxHotbarSlots);
 
+    /// <summary>Selected slot index, or -1 when nothing is equipped.</summary>
     public int SelectedSlotIndex => _selectedSlotIndex;
 
+    /// <summary>Caches components, ensures interactor/flashlight, and initializes default slots.</summary>
     private void Awake()
     {
         _hudController = GetComponent<PlayerHUDController>();
@@ -83,15 +101,13 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (!TryGetComponent(out _flashlightMode))
             _flashlightMode = gameObject.AddComponent<PlayerFlashlightMode>();
 
-        // Pickup raycast, Interact key, and the HUD context prompts all live on
-        // PlayerInteractor. Auto-add it so existing player prefabs/scenes don't
-        // silently lose pickup + interaction when this script is updated.
         if (!TryGetComponent<PlayerInteractor>(out _))
             gameObject.AddComponent<PlayerInteractor>();
 
         EnsureInventoryInitialized();
     }
 
+    /// <summary>True when this instance should accept local input (offline or owner).</summary>
     public bool IsLocalControllingPlayer()
     {
         if (!IsSpawned)
@@ -99,6 +115,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         return IsOwner;
     }
 
+    /// <summary>True when this client should update HUD elements for this player.</summary>
     public bool ShouldPublishHud()
     {
         return !IsSpawned || IsOwner;
@@ -118,6 +135,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplySelection(publishHud: true);
     }
 
+    /// <summary>Clamps selection to available slots and applies backpack and equip state.</summary>
     private void Start()
     {
         if (_selectedSlotIndex >= AvailableSlots)
@@ -126,14 +144,15 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplySelection(publishHud: true);
     }
 
+    /// <summary>Re-applies inventory and HUD when the component is enabled.</summary>
     private void OnEnable()
     {
-        // When re-enabled, refresh HUD + equip state
         EnsureInventoryInitialized();
         ApplyBackpackState();
         ApplySelection(publishHud: true);
     }
 
+    /// <summary>Local owner handles drop and hotbar selection key input.</summary>
     private void Update()
     {
         if (!IsLocalControllingPlayer())
@@ -149,11 +168,13 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         HandleSelectionInput(kb);
     }
 
+    /// <summary>Refreshes equip state and HUD after external changes.</summary>
     public void RefreshHudState()
     {
         ApplySelection(publishHud: true);
     }
 
+    /// <summary>Assigns default slot contents (camera in slot 0, optional starter flashlight).</summary>
     private void EnsureInventoryInitialized()
     {
         if (_inventoryInitialized)
@@ -162,6 +183,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (_slotItems == null || _slotItems.Length != MaxHotbarSlots)
             _slotItems = new InventoryItemType[MaxHotbarSlots];
 
+        // Clear slots then pin camera to slot 0.
         for (int i = 0; i < _slotItems.Length; i++)
             _slotItems[i] = InventoryItemType.None;
 
@@ -177,10 +199,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         _inventoryInitialized = true;
     }
 
+    /// <summary>Maps C and digit keys to hotbar slot toggle requests.</summary>
     private void HandleSelectionInput(Keyboard kb)
     {
-        // Input mapping: [C, 1, 2, 3, 4]
-        // Slot 0 is camera (C), slots 1-4 are inventory items (1-4)
         if (kb.cKey.wasPressedThisFrame)
             RequestToggleSlot(0);
 
@@ -194,6 +215,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             RequestToggleSlot(requested);
     }
 
+    /// <summary>Toggles selection locally and syncs to server or via RPC when networked.</summary>
     private void RequestToggleSlot(int index)
     {
         ToggleSlot(index);
@@ -207,25 +229,26 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         }
     }
 
+    /// <summary>Selects slot index or deselects if already selected.</summary>
     private void ToggleSlot(int index)
     {
         if (index < 0)
             return;
 
-        // If slot is not available (due to backpack limits), ignore
         if (index >= AvailableSlots)
             return;
 
-        // Pressing the currently selected slot key stows it (no active item)
         _selectedSlotIndex = (_selectedSlotIndex == index) ? -1 : index;
         ApplySelection(publishHud: true);
     }
 
+    /// <summary>Updates equipped camera/flashlight and optionally publishes HUD state.</summary>
     private void ApplySelection(bool publishHud)
     {
         InventoryItemType selectedItem = GetSelectedItem();
         bool localControl = IsLocalControllingPlayer();
 
+        // Equip modes only for local controlling player (camera) or any owner (flashlight visual).
         if (_cameraMode != null)
             _cameraMode.SetEquipped(localControl && selectedItem == InventoryItemType.Camera);
 
@@ -236,9 +259,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             PublishHotbarState();
     }
 
+    /// <summary>Clamps selection, syncs backpack to movement, and refreshes HUD.</summary>
     private void ApplyBackpackState()
     {
-        // Clamp selection into new range
         if (_selectedSlotIndex >= AvailableSlots)
             _selectedSlotIndex = -1;
 
@@ -249,6 +272,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplySelection(publishHud: false);
     }
 
+    /// <summary>Builds slot display names and pushes hotbar state to the HUD.</summary>
     private void PublishHotbarState()
     {
         if (_hudController == null || !ShouldPublishHud())
@@ -261,6 +285,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         PublishItemKeyHints();
     }
 
+    /// <summary>Shows primary-use and drop key hints for the currently selected item.</summary>
     private void PublishItemKeyHints()
     {
         if (_hudController == null || !ShouldPublishHud())
@@ -293,6 +318,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         _hudController.SetItemKeyHints(visible, primaryLine, dropLine);
     }
 
+    /// <summary>Returns the item in the selected slot, or None when deselected.</summary>
     private InventoryItemType GetSelectedItem()
     {
         if (_selectedSlotIndex < 0 || _selectedSlotIndex >= _slotItems.Length)
@@ -301,6 +327,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         return _slotItems[_selectedSlotIndex];
     }
 
+    /// <summary>True if any hotbar slot already holds the given item type.</summary>
     private bool ContainsItem(InventoryItemType itemType)
     {
         for (int i = 0; i < _slotItems.Length; i++)
@@ -312,6 +339,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         return false;
     }
 
+    /// <summary>First empty slot index from 1 upward, or -1 if full.</summary>
     private int GetFirstAvailableInventorySlot()
     {
         for (int i = 1; i < AvailableSlots; i++)
@@ -323,6 +351,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         return -1;
     }
 
+    /// <summary>Resolves which slot receives a pickup (selected empty slot or first free).</summary>
     private bool TryGetPickupSlot(InventoryItemType itemType, out int slotIndex)
     {
         slotIndex = -1;
@@ -330,6 +359,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (itemType == InventoryItemType.None || itemType == InventoryItemType.Camera)
             return false;
 
+        // Prefer filling the currently selected empty slot.
         if (_selectedSlotIndex > 0 &&
             _selectedSlotIndex < AvailableSlots &&
             _slotItems[_selectedSlotIndex] == InventoryItemType.None)
@@ -342,6 +372,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         return slotIndex > 0;
     }
 
+    /// <summary>Drops the selected item in front of the camera; offline or via server RPC.</summary>
     private void DropSelectedItem()
     {
         if (_selectedSlotIndex <= 0 || _selectedSlotIndex >= _slotItems.Length)
@@ -354,6 +385,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (_gameplayCamera == null)
             _gameplayCamera = GetComponentInChildren<Camera>(true);
 
+        // Spawn pose and impulse from camera forward.
         Transform dropOrigin = _gameplayCamera != null ? _gameplayCamera.transform : transform;
         Vector3 forward = dropOrigin.forward;
         Vector3 spawnPosition = dropOrigin.position +
@@ -362,6 +394,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         Quaternion spawnRotation = Quaternion.LookRotation(forward, Vector3.up);
         Vector3 spawnVelocity = forward * _dropForwardImpulse + Vector3.up * _dropUpImpulse;
 
+        // Offline: spawn world item immediately and clear slot.
         if (!IsSpawned)
         {
             WorldInventoryItem droppedItem = WorldInventoryItem.SpawnDropped(
@@ -373,6 +406,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             if (droppedItem != null && droppedItem.TryGetComponent(out Rigidbody rb))
                 rb.AddForce(spawnVelocity, ForceMode.VelocityChange);
         }
+        // Networked: clear slot locally, then server or client RPC spawns replicated world item.
         else
         {
             int droppedSlot = _selectedSlotIndex;
@@ -393,9 +427,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplySelection(publishHud: true);
     }
 
-    // True if the given item type can fit somewhere in the player's hotbar right
-    // now. Used by PlayerInteractor for the "Press E to pick up X" / "No empty slot"
-    // HUD prompt.
+    /// <summary>Whether the item type can fit in the hotbar (for interact hints).</summary>
     public bool CanPickup(InventoryItemType itemType)
     {
         if (!IsLocalControllingPlayer())
@@ -403,10 +435,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         return TryGetPickupSlot(itemType, out _);
     }
 
-    // Called by PlayerInteractor when the Interact key is pressed while a world
-    // item is focused. Mirrors the previous TryPickupFocusedItem logic but takes
-    // the focused item from the caller instead of resolving it via an internal
-    // raycast.
+    /// <summary>Picks up a world item when interact is pressed on a focused pickup.</summary>
     public void RequestPickup(WorldInventoryItem worldItem)
     {
         if (worldItem == null || !IsLocalControllingPlayer())
@@ -429,6 +458,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             RpcRequestPickupWorldItem(worldItem.NetworkItemId);
     }
 
+    /// <summary>Applies replicated slot contents and selection from an ObserversRpc.</summary>
     private void ApplyInventoryState(
         InventoryItemType slot0,
         InventoryItemType slot1,
@@ -448,6 +478,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplySelection(publishHud: true);
     }
 
+    /// <summary>Pushes full hotbar state to all observers from the server.</summary>
     private void BroadcastInventoryState()
     {
         if (!IsServerStarted)
@@ -462,6 +493,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             _selectedSlotIndex);
     }
 
+    /// <summary>Client requests server to toggle a hotbar slot.</summary>
     [ServerRpc(RequireOwnership = true)]
     private void RpcRequestToggleSlot(int index)
     {
@@ -469,6 +501,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         BroadcastInventoryState();
     }
 
+    /// <summary>Client requests server to validate and finalize a drop.</summary>
     [ServerRpc(RequireOwnership = true)]
     private void RpcRequestDropSelectedItem(
         InventoryItemType itemType,
@@ -496,12 +529,14 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ServerFinalizeDrop(itemType, position, rotation, velocity);
     }
 
+    /// <summary>Client requests server to pick up a replicated world item by id.</summary>
     [ServerRpc(RequireOwnership = true)]
     private void RpcRequestPickupWorldItem(int networkItemId)
     {
         ServerTryPickupWorldItem(networkItemId);
     }
 
+    /// <summary>Replicates hotbar slot contents and selection to all clients.</summary>
     [ObserversRpc]
     private void ObserversApplyInventoryState(
         InventoryItemType slot0,
@@ -514,6 +549,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         ApplyInventoryState(slot0, slot1, slot2, slot3, slot4, selectedSlot);
     }
 
+    /// <summary>Spawns a replicated world pickup on all clients.</summary>
     [ObserversRpc]
     private void ObserversSpawnWorldItem(
         int networkItemId,
@@ -525,12 +561,14 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         WorldInventoryItem.SpawnReplicated(networkItemId, itemType, position, rotation, velocity);
     }
 
+    /// <summary>Destroys a replicated world pickup on all clients.</summary>
     [ObserversRpc]
     private void ObserversDestroyWorldItem(int networkItemId)
     {
         WorldInventoryItem.DestroyReplicated(networkItemId);
     }
 
+    /// <summary>Registers dropped item on server and notifies clients to spawn world pickup.</summary>
     private void ServerFinalizeDrop(
         InventoryItemType itemType,
         Vector3 position,
@@ -544,6 +582,7 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         BroadcastInventoryState();
     }
 
+    /// <summary>Validates pickup, assigns slot, removes world item, and broadcasts inventory.</summary>
     private void ServerTryPickupWorldItem(int networkItemId)
     {
         if (!s_serverWorldItems.TryGetValue(networkItemId, out InventoryItemType itemType))
@@ -565,4 +604,3 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         BroadcastInventoryState();
     }
 }
-

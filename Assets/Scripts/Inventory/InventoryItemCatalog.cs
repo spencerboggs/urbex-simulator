@@ -1,5 +1,7 @@
+/// <summary>Display names and capability flags per <see cref="InventoryItemType"/>.</summary>
 public static class InventoryItemCatalog
 {
+    /// <summary>Player-facing item name.</summary>
     public static string GetDisplayName(InventoryItemType itemType)
     {
         return itemType switch
@@ -10,6 +12,7 @@ public static class InventoryItemCatalog
         };
     }
 
+    /// <summary>Whether the item can be dropped into the world.</summary>
     public static bool CanDrop(InventoryItemType itemType)
     {
         return itemType switch
@@ -19,6 +22,7 @@ public static class InventoryItemCatalog
         };
     }
 
+    /// <summary>Whether the item has a primary-use action.</summary>
     public static bool SupportsPrimaryUse(InventoryItemType itemType)
     {
         return itemType switch
@@ -28,7 +32,7 @@ public static class InventoryItemCatalog
         };
     }
 
-    // Action text after the key in item hints, e.g. "Toggle Flashlight"
+    /// <summary>Primary-use hint suffix (e.g. "Toggle Flashlight").</summary>
     public static string GetPrimaryUseDescription(InventoryItemType itemType)
     {
         return itemType switch

@@ -1,18 +1,17 @@
 using UnityEngine;
 
-// Any object the player can target with the Interact key. Doors implement this
-// World items have their own pickup pipeline; PlayerInteractor checks for items first
-// and falls back to IInteractable, so both work through the same Interact bind
+/// <summary>
+/// Object the player can target with the interact key. World items use a separate pickup pipeline;
+/// <see cref="PlayerInteractor"/> checks items first, then falls back to this interface.
+/// </summary>
 public interface IInteractable
 {
-    // True if the player is currently allowed to interact with this object.
-    // Pass false to short-circuit input and HUD prompts (e.g. door is locked)
+    /// <summary>Whether the player may interact right now (e.g. door is not locked).</summary>
     bool CanInteract(Transform interactor);
 
-    // Short prompt shown in the HUD context line ("Open door", "Close door")
-    // Return null or empty to suppress the prompt while still allowing interaction
+    /// <summary>HUD prompt text such as "Open door"; null or empty suppresses the prompt.</summary>
     string GetInteractionPrompt();
 
-    // Called when the Interact key is pressed while this object is the focused target
+    /// <summary>Called when interact is pressed while this object is the focused target.</summary>
     void Interact(Transform interactor);
 }

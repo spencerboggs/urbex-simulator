@@ -3,10 +3,9 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
-// Builds a minimal default Canvas + controls when scenes have no authored UI
+/// <summary>Builds default Canvas UI when menu/lobby scenes have no authored layout.</summary>
 public static class MultiplayerUiRuntimeBuilder
 {
-    // Bake UI scaling into authored sizes (not transform scaling)
     private const float UiScale = 2f;
 
     private const float ColumnWidth = 460f * UiScale;
@@ -18,9 +17,10 @@ public static class MultiplayerUiRuntimeBuilder
     private const int LobbySubtitleFontSize = (int)(22 * UiScale);
     private const int LobbyBodyFontSize = (int)(20 * UiScale);
 
+    /// <summary>Shared white sprite for runtime-generated Image backgrounds.</summary>
     private static Sprite _uiSprite;
 
-    // 1×1 white sprite so Image draws reliably
+    /// <summary>Lazy white sprite used by StyleImage for buttons and panels.</summary>
     private static Sprite UiSprite
     {
         get
@@ -34,10 +34,9 @@ public static class MultiplayerUiRuntimeBuilder
         }
     }
 
+    /// <summary>Resolves a readable UI font from OS, builtin, or installed fallbacks.</summary>
     private static Font DefaultUiFont()
     {
-        // Built-in Resources font paths vary by Unity version and often return null on Unity 6+
-        // OS dynamic fonts are the most reliable for runtime-generated uGUI Text
         string[] osNames = { "Arial", "Segoe UI", "Helvetica", "Liberation Sans", "Noto Sans", "DejaVu Sans" };
         foreach (string name in osNames)
         {
@@ -66,6 +65,7 @@ public static class MultiplayerUiRuntimeBuilder
         return null;
     }
 
+    /// <summary>Applies the shared white sprite and simple Image settings.</summary>
     private static void StyleImage(Image img)
     {
         img.sprite = UiSprite;
@@ -73,6 +73,7 @@ public static class MultiplayerUiRuntimeBuilder
         img.preserveAspect = false;
     }
 
+    /// <summary>Adds LayoutElement height and optional fixed column width for vertical groups.</summary>
     private static void AddLayoutElement(GameObject go, float height, float fixedColumnWidth = -1f)
     {
         var le = go.AddComponent<LayoutElement>();
@@ -90,6 +91,7 @@ public static class MultiplayerUiRuntimeBuilder
         }
     }
 
+    /// <summary>Creates an EventSystem with Input System UI module if missing.</summary>
     public static void EnsureEventSystem()
     {
         if (Object.FindAnyObjectByType<EventSystem>() != null)
@@ -97,13 +99,10 @@ public static class MultiplayerUiRuntimeBuilder
 
         var es = new GameObject("EventSystem");
         es.AddComponent<EventSystem>();
-        // Project uses "Input System Package" only
-        // StandaloneInputModule uses legacy UnityEngine.Input
         es.AddComponent<InputSystemUIInputModule>();
     }
 
-    // Menu/lobby scenes copied from the level often have no Camera
-    // The Game view then shows "No cameras rendering" and UI may not appear correctly
+    /// <summary>Adds a menu camera when the scene has none (avoids empty Game view).</summary>
     public static void EnsureSceneCamera()
     {
         if (Object.FindAnyObjectByType<Camera>() != null)
@@ -121,6 +120,7 @@ public static class MultiplayerUiRuntimeBuilder
         camGo.tag = "MainCamera";
     }
 
+    /// <summary>Stretches the root RectTransform to full screen for overlay canvases.</summary>
     private static void EnsureCanvasFillsScreen(GameObject canvasRoot)
     {
         var rect = canvasRoot.GetComponent<RectTransform>();
@@ -136,6 +136,7 @@ public static class MultiplayerUiRuntimeBuilder
         rect.localScale = Vector3.one;
     }
 
+    /// <summary>Builds the default main menu hierarchy on <paramref name="menu"/>.</summary>
     public static void BuildMainMenu(MainMenuUI menu)
     {
         if (menu == null)
@@ -144,6 +145,7 @@ public static class MultiplayerUiRuntimeBuilder
         EnsureSceneCamera();
         EnsureEventSystem();
 
+        // Screen-space overlay with scaled reference resolution.
         var canvasGo = new GameObject("MainMenuCanvas");
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -161,7 +163,6 @@ public static class MultiplayerUiRuntimeBuilder
         var playBtn = CreateButton(main.transform, "PlayButton", "Play");
         var quitBtn = CreateButton(main.transform, "QuitButton", "Quit");
 
-        // Play menu items are stacked vertically, with horizontal dividers to separate sections.
         var hostBtn = CreateButton(play.transform, "HostButton", "Host Game");
         var dividerA = CreateHorizontalDivider(play.transform, "DividerA");
 
@@ -225,6 +226,7 @@ public static class MultiplayerUiRuntimeBuilder
         menu.ApplyRuntimeReferences(main, play, input, playBtn, quitBtn, hostBtn, joinBtn, backBtn);
     }
 
+    /// <summary>Builds the default lobby hierarchy on <paramref name="lobby"/>.</summary>
     public static void BuildLobby(LobbyUI lobby)
     {
         if (lobby == null)
@@ -233,6 +235,7 @@ public static class MultiplayerUiRuntimeBuilder
         EnsureSceneCamera();
         EnsureEventSystem();
 
+        // Lobby overlay: title, counts, map label, and host actions.
         var canvasGo = new GameObject("LobbyCanvas");
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -289,6 +292,7 @@ public static class MultiplayerUiRuntimeBuilder
         lobby.ApplyRuntimeReferences(countText, mapLabel, mapNext, startBtn, leaveBtn);
     }
 
+    /// <summary>Full-screen black panel with centered vertical layout.</summary>
     private static GameObject CreatePanel(Transform parent, string name)
     {
         var go = new GameObject(name);
@@ -305,15 +309,14 @@ public static class MultiplayerUiRuntimeBuilder
         layout.childAlignment = TextAnchor.MiddleCenter;
         layout.spacing = 18f * UiScale;
         layout.padding = new RectOffset((int)(56 * UiScale), (int)(56 * UiScale), (int)(56 * UiScale), (int)(56 * UiScale));
-        // With childControlHeight true, Text with a bad/missing font reports 0 preferred height (controls collapse to invisible)
         layout.childControlHeight = true;
         layout.childControlWidth = true;
         layout.childForceExpandHeight = false;
-        // Let buttons/inputs use their preferred width so they stay a centered column, not edge-to-edge
         layout.childForceExpandWidth = false;
         return go;
     }
 
+    /// <summary>Styled button with label text child for runtime menus.</summary>
     private static Button CreateButton(Transform parent, string name, string label)
     {
         var go = new GameObject(name);
@@ -356,6 +359,7 @@ public static class MultiplayerUiRuntimeBuilder
         return btn;
     }
 
+    /// <summary>Thin horizontal rule between play submenu sections.</summary>
     private static GameObject CreateHorizontalDivider(Transform parent, string name)
     {
         var go = new GameObject(name);

@@ -3,16 +3,27 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
+/// <summary>
+/// Early-runtime Steamworks.SteamAPI init via reflection so the project builds without Steam DLLs.
+/// </summary>
 [DefaultExecutionOrder(-10000)]
 internal sealed class SteamBootstrap : MonoBehaviour
 {
+    /// <summary>True after SteamAPI.Init succeeds.</summary>
     private bool _initialized;
+
+    /// <summary>Cached SteamAPI.Init when Steamworks is loaded.</summary>
     private MethodInfo _steamApiInit;
+
+    /// <summary>Cached SteamAPI.RunCallbacks when Steamworks is loaded.</summary>
     private MethodInfo _steamApiRunCallbacks;
+
+    /// <summary>Cached SteamAPI.Shutdown when Steamworks is loaded.</summary>
     private MethodInfo _steamApiShutdown;
 
     internal bool IsInitialized => _initialized;
 
+    /// <summary>Persists across scenes and attempts Steam API bind and init.</summary>
     private void Awake()
     {
         DontDestroyOnLoad(gameObject);
@@ -20,6 +31,7 @@ internal sealed class SteamBootstrap : MonoBehaviour
         TryInitSteam();
     }
 
+    /// <summary>Pumps Steam callbacks each frame while initialized.</summary>
     private void Update()
     {
         if (!_initialized)
@@ -27,28 +39,34 @@ internal sealed class SteamBootstrap : MonoBehaviour
         _steamApiRunCallbacks?.Invoke(null, null);
     }
 
+    /// <summary>Shuts down Steam when the application quits.</summary>
     private void OnApplicationQuit()
     {
         Shutdown();
     }
 
+    /// <summary>Shuts down Steam when this bootstrap object is destroyed.</summary>
     private void OnDestroy()
     {
         Shutdown();
     }
 
+    /// <summary>Calls SteamAPI.Shutdown once if init had succeeded.</summary>
     private void Shutdown()
     {
         if (!_initialized)
             return;
         _initialized = false;
         try { _steamApiShutdown?.Invoke(null, null); }
-        catch { /* best-effort */ }
+        catch
+        {
+            // Best effort.
+        }
     }
 
+    /// <summary>Resolves SteamAPI static methods from loaded Steamworks assemblies.</summary>
     private void TryBindSteamworks()
     {
-        // Prefer already-loaded assemblies
         Type steamApiType = AppDomain.CurrentDomain
             .GetAssemblies()
             .Select(a => a.GetType("Steamworks.SteamAPI", throwOnError: false))
@@ -62,6 +80,7 @@ internal sealed class SteamBootstrap : MonoBehaviour
         _steamApiShutdown = steamApiType.GetMethod("Shutdown", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
     }
 
+    /// <summary>Invokes SteamAPI.Init and logs success or failure.</summary>
     private void TryInitSteam()
     {
         if (_steamApiInit == null)

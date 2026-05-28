@@ -3,31 +3,17 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-// Keeps the MapCatalog asset and EditorBuildSettings in sync with the contents
-// of Assets/Scenes/Gameplay/. Runs automatically whenever a .unity file under
-// Assets/Scenes/ is imported, moved, or deleted, and is also available from the
-// Tools menu for a manual refresh.
-//
-// Behaviour:
-//   - Discovers every .unity file under Assets/Scenes/Gameplay/ (recursive).
-//   - Updates Assets/Resources/MapCatalog.asset (creates the Resources folder
-//     and asset if either is missing) with one MapEntry per discovered scene.
-//   - Preserves any user-edited displayName by matching on sceneName. New
-//     scenes get displayName = sceneName (designers can edit it in the asset).
-//   - Updates EditorBuildSettings.scenes: keeps non-gameplay entries as-is
-//     (preserving their GUIDs and enabled flags), drops gameplay entries whose
-//     file no longer exists, and adds new gameplay scenes as enabled. Existing
-//     gameplay entries keep their enabled flag.
-//
-// Gameplay scenes have to be in EditorBuildSettings or FishNet/Unity can't load
-// them by name in a build - this auto-sync ensures designers never forget that
-// step when adding a new map.
+/// <summary>
+/// Keeps MapCatalog and EditorBuildSettings in sync with Assets/Scenes/Gameplay/.
+/// Runs on scene asset changes and via Tools/Urbex/Refresh Map Catalog.
+/// </summary>
 public sealed class MapCatalogAutoSync : AssetPostprocessor
 {
     private const string GameplayScenesRoot = "Assets/Scenes/Gameplay";
     private const string ResourcesFolder = "Assets/Resources";
     private const string MapCatalogAssetPath = ResourcesFolder + "/MapCatalog.asset";
 
+    /// <summary>Asset postprocessor hook: resync when gameplay scenes change.</summary>
     private static void OnPostprocessAllAssets(
         string[] importedAssets,
         string[] deletedAssets,
@@ -38,6 +24,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
             Resync();
     }
 
+    /// <summary>Manual refresh from the Tools menu.</summary>
     [MenuItem("Tools/Urbex/Refresh Map Catalog")]
     public static void RefreshFromMenu()
     {
@@ -45,6 +32,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         Debug.Log("[MapCatalogAutoSync] Manual refresh complete.");
     }
 
+    /// <summary>True when any path is a scene under Assets/Scenes/.</summary>
     private static bool AnyScene(string[] paths)
     {
         if (paths == null) return false;
@@ -60,6 +48,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         return false;
     }
 
+    /// <summary>Discovers gameplay scenes and updates build settings plus MapCatalog asset.</summary>
     private static void Resync()
     {
         List<string> gameplayScenePaths = DiscoverGameplayScenes();
@@ -67,6 +56,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         try
         {
             AssetDatabase.StartAssetEditing();
+            // Keep EditorBuildSettings and MapCatalog.asset aligned with disk.
             SyncBuildSettings(gameplayScenePaths);
             SyncMapCatalog(gameplayScenePaths);
         }
@@ -78,6 +68,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         }
     }
 
+    /// <summary>Collects sorted .unity paths under GameplayScenesRoot.</summary>
     private static List<string> DiscoverGameplayScenes()
     {
         List<string> result = new List<string>();
@@ -92,12 +83,11 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         return result;
     }
 
+    /// <summary>Merges gameplay scenes into EditorBuildSettings without removing other scenes.</summary>
     private static void SyncBuildSettings(List<string> gameplayScenePaths)
     {
         EditorBuildSettingsScene[] current = EditorBuildSettings.scenes ?? new EditorBuildSettingsScene[0];
 
-        // Index existing entries by normalized path so we can preserve enabled flags
-        // and skip duplicating anything already registered.
         Dictionary<string, EditorBuildSettingsScene> existingByPath = new Dictionary<string, EditorBuildSettingsScene>(System.StringComparer.OrdinalIgnoreCase);
         foreach (EditorBuildSettingsScene s in current)
         {
@@ -107,8 +97,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
 
         List<EditorBuildSettingsScene> next = new List<EditorBuildSettingsScene>(current.Length + gameplayScenePaths.Count);
 
-        // Keep every non-gameplay scene exactly as it was - we never want to touch
-        // MainMenu, Lobby, Testing scenes, or anything the user has manually added.
+        // Retain non-gameplay scenes (menu, lobby, etc.).
         foreach (EditorBuildSettingsScene s in current)
         {
             if (s == null || string.IsNullOrEmpty(s.path)) continue;
@@ -117,8 +106,6 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
                 next.Add(s);
         }
 
-        // Re-add (or freshly add) every discovered gameplay scene. Preserve the
-        // existing entry - and therefore its enabled flag and GUID - when present.
         HashSet<string> alreadyAdded = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
         foreach (string path in gameplayScenePaths)
         {
@@ -131,12 +118,11 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
                 next.Add(new EditorBuildSettingsScene(path, true));
         }
 
-        // Only write back if the list actually changed - avoids spurious asset
-        // changes on every script reload.
         if (!ScenesEqual(current, next))
             EditorBuildSettings.scenes = next.ToArray();
     }
 
+    /// <summary>Compares build settings scene lists for path and enabled flag.</summary>
     private static bool ScenesEqual(EditorBuildSettingsScene[] a, List<EditorBuildSettingsScene> b)
     {
         if (a == null || b == null) return a == null && b == null;
@@ -150,6 +136,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         return true;
     }
 
+    /// <summary>Creates or updates MapCatalog.asset entries from discovered scene paths.</summary>
     private static void SyncMapCatalog(List<string> gameplayScenePaths)
     {
         EnsureFolderExists(ResourcesFolder);
@@ -163,7 +150,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
             isNew = true;
         }
 
-        // Preserve user-edited display names by sceneName.
+        // Preserve hand-edited display names when the scene name is unchanged.
         Dictionary<string, string> existingDisplayBySceneName = new Dictionary<string, string>(System.StringComparer.Ordinal);
         if (catalog.Maps != null)
         {
@@ -191,8 +178,6 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
             };
         }
 
-        // Skip the write if nothing actually changed - keeps the inspector clean
-        // and avoids touching the asset on every script recompile.
         if (!isNew && MapsEqual(catalog.Maps, next))
             return;
 
@@ -200,6 +185,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         EditorUtility.SetDirty(catalog);
     }
 
+    /// <summary>Compares catalog map entries for scene and display name equality.</summary>
     private static bool MapsEqual(MapCatalog.MapEntry[] a, MapCatalog.MapEntry[] b)
     {
         if (a == null || b == null) return a == null && b == null;
@@ -213,6 +199,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         return true;
     }
 
+    /// <summary>Recursively creates an Assets/... folder path when missing.</summary>
     private static void EnsureFolderExists(string folder)
     {
         if (AssetDatabase.IsValidFolder(folder))

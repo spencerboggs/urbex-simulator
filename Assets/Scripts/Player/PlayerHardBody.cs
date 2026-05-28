@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>
+/// Kinematic capsule collider that mirrors the CharacterController for external physics blocking.
+/// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(CharacterController))]
 public sealed class PlayerHardBody : MonoBehaviour
@@ -8,10 +11,14 @@ public sealed class PlayerHardBody : MonoBehaviour
     [SerializeField]
     private int _hardBodyLayer = -1;
 
+    /// <summary>Source CharacterController whose dimensions drive the hard body.</summary>
     private CharacterController _cc;
+    /// <summary>Kinematic rigidbody on the hard body child for physics queries.</summary>
     private Rigidbody _rb;
+    /// <summary>Non-trigger capsule on the hard body child, ignored against the controller.</summary>
     private CapsuleCollider _capsule;
 
+    /// <summary>Creates hard body child objects and performs an initial sync.</summary>
     private void Awake()
     {
         _cc = GetComponent<CharacterController>();
@@ -19,23 +26,26 @@ public sealed class PlayerHardBody : MonoBehaviour
         SyncFromCharacterController();
     }
 
+    /// <summary>Ensures hard body exists when re-enabled after disable.</summary>
     private void OnEnable()
     {
         EnsureHardBodyObjects();
         SyncFromCharacterController();
     }
 
+    /// <summary>Keeps hard body capsule aligned with CharacterController each frame.</summary>
     private void LateUpdate()
     {
-        // Keep the blocking capsule in sync with crouch height/center changes
         SyncFromCharacterController();
     }
 
+    /// <summary>Creates or finds __HardBody child with capsule, rigidbody, and layer setup.</summary>
     private void EnsureHardBodyObjects()
     {
         if (_capsule != null && _rb != null)
             return;
 
+        // Find or create the hard body child under the player root.
         Transform existing = transform.Find("__HardBody");
         GameObject go = existing != null ? existing.gameObject : new GameObject("__HardBody");
         if (existing == null)
@@ -52,7 +62,7 @@ public sealed class PlayerHardBody : MonoBehaviour
         if (_capsule == null)
             _capsule = go.AddComponent<CapsuleCollider>();
 
-        _capsule.direction = 1; // Y axis
+        _capsule.direction = 1;
         _capsule.isTrigger = false;
 
         _rb = go.GetComponent<Rigidbody>();
@@ -65,11 +75,11 @@ public sealed class PlayerHardBody : MonoBehaviour
         _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
         _rb.constraints = RigidbodyConstraints.FreezeRotation;
 
-        // Ensure our own CharacterController isn't blocked by its own hard body
         if (_cc != null && _capsule != null)
             Physics.IgnoreCollision(_cc, _capsule, true);
     }
 
+    /// <summary>Copies center, radius, and height from CharacterController to the hard body capsule.</summary>
     private void SyncFromCharacterController()
     {
         if (_cc == null || _capsule == null)
@@ -80,4 +90,3 @@ public sealed class PlayerHardBody : MonoBehaviour
         _capsule.height = Mathf.Max(_capsule.radius * 2f + 0.01f, _cc.height);
     }
 }
-

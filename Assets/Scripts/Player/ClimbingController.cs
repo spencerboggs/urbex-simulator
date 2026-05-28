@@ -1,29 +1,23 @@
-using System.Collections.Specialized;
-using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Debug = UnityEngine.Debug;
 
+/// <summary>
+/// Mantle climbs over ledges and attached wall-climbing on Climbable-tagged surfaces.
+/// </summary>
 [RequireComponent(typeof(CharacterController))]
 public class ClimbingController : MonoBehaviour
 {
     [Header("Detection")]
-    // Distance to check for walls in front of the player
     public float wallCheckDistance = 0.6f;
-    // Heights at which to check for walls
     public float upCheckHeight = 1.3f;
     public float lowCheckHeight = 0.5f;
-    // Small offset to prevent starting raycasts inside walls
     public float skinWidth = 0.1f;
 
     [Header("Climb Offsets")]
-    // The amount of extra height the player needs to clear the wall
     public float heightOffset = 1.2f;
-    // Additional clearance height to ensure the player doesn't get stuck on the edge
     public float clearanceHeight = 1.2f;
 
     [Header("Climb")]
-    // Time it takes to complete the climb
     public float climbSpeed = 4f;
 
     [Header("Attached Wall Climb (Climbable tag)")]
@@ -126,32 +120,69 @@ public class ClimbingController : MonoBehaviour
     [Range(3, 12)]
     public int wallCornerProbeSteps = 7;
 
+    /// <summary>
+    /// Waist, chest, and head probe heights for multi-sample wall contact while clinging.
+    /// </summary>
     static readonly float[] WallProbeHeights = { 0.45f, 1.0f, 1.45f };
 
-    // Internal state
     private CharacterController controller;
     private PlayerMovement movement;
     private InputAction moveAction;
 
-    // Mantle state variables
+    /// <summary>
+    /// True while the player is lerping through a ledge mantle (not wall-cling).
+    /// </summary>
     private bool isClimbing = false;
+    /// <summary>
+    /// World position the mantle lerp ends at (on top of the ledge with forward offset).
+    /// </summary>
     private Vector3 climbTarget;
+    /// <summary>
+    /// Player position when the current mantle began; used for rise-then-forward paths.
+    /// </summary>
     private Vector3 climbStartPosition;
+    /// <summary>
+    /// Intermediate waypoint for tall mantles: rise to lip height before moving onto the ledge.
+    /// </summary>
     private Vector3 climbMidPoint;
 
-    // Wall cling state variables
+    /// <summary>
+    /// True while attached to a Climbable-tagged surface with movement locked to the wall plane.
+    /// </summary>
     private bool isWallClinging = false;
+    /// <summary>
+    /// Outward-facing normal of the wall face used for offset and look constraints.
+    /// </summary>
     private Vector3 wallNormal = Vector3.forward;
+    /// <summary>
+    /// Collider currently providing cling contact; used to detect face changes at corners.
+    /// </summary>
     private Collider currentClingCollider;
+    /// <summary>
+    /// Countdown after detach before the same wall can be gripped again.
+    /// </summary>
     private float clingCooldownTimer = 0f;
-    // Seconds spent off the wall since last successful probe. Always ticks while clinging
-    // without a surface in front, so the player can never get stuck in a phantom-cling
-    // state in mid-air. Resets to 0 whenever the probe re-acquires a climbable surface
+    /// <summary>
+    /// Seconds spent hauling over the top lip with reduced or no forward wall contact.
+    /// </summary>
     private float topOutTimer = 0f;
+
+    /// <summary>
+    /// Seconds without wall contact while clinging. Resets when a climbable surface is re-acquired.
+    /// </summary>
     private float offSurfaceTimer = 0f;
+    /// <summary>
+    /// Blended attach normal; eases corner transfers instead of snapping each frame.
+    /// </summary>
     private Vector3 smoothedWallNormal = Vector3.forward;
+    /// <summary>
+    /// World yaw reference for limiting look rotation while wall-clinging.
+    /// </summary>
     private float wallClingYawCenter;
 
+    /// <summary>
+    /// How the player is transitioning between wall faces at a corner during cling.
+    /// </summary>
     enum CornerWrapKind
     {
         None,
@@ -163,6 +194,9 @@ public class ClimbingController : MonoBehaviour
     public float WallClingYawCenter => wallClingYawCenter;
     public float WallClingYawLimit => wallClingYawLimit;
 
+    /// <summary>
+    /// Caches CharacterController, PlayerMovement, and the Move input action.
+    /// </summary>
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -175,6 +209,9 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Drives mantle, wall-cling, or ledge detection depending on current climb state.
+    /// </summary>
     void Update()
     {
         if (isClimbing)
@@ -192,10 +229,7 @@ public class ClimbingController : MonoBehaviour
         if (clingCooldownTimer > 0f)
             clingCooldownTimer -= Time.deltaTime;
 
-        // Priority 1: if there is a Climbable-tagged surface in front, the new
-        // attached wall-climb system handles it. Tagged surfaces are intentionally
-        // reserved for this system and must never fall through to the mantle.
-        // Priority 2: otherwise, defer to the existing mantle climb (untouched).
+        // Climbable-tagged surfaces use wall-cling; otherwise attempt mantle when airborne.
         if (TryHandleClimbableWall())
         {
             return;
@@ -206,26 +240,25 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Probes for a mantle ledge in front of the player and starts a climb when valid.
+    /// </summary>
     void DetectLedgeAndAutoClimb()
     {
-        // Get the forward direction of the player
         Vector3 forward = transform.forward;
-
-        // Start rays from slightly in front of the character to avoid starting inside walls
         float startOffset = skinWidth;
 
-        // Detection points
+        // Spherecast at low and mid heights to find the nearest wall segment in front.
         Vector3 lowOrigin = transform.position + Vector3.up * lowCheckHeight + forward * startOffset;
         Vector3 midOrigin = transform.position + Vector3.up * 1.0f + forward * startOffset;
         Vector3 upperOrigin = transform.position + Vector3.up * upCheckHeight + forward * startOffset;
 
-        /* Check if wall is in front */
         float sphereRadius = 0.2f;
         RaycastHit lowHit, midHit;
         bool wallInFrontLow = Physics.SphereCast(lowOrigin, sphereRadius, forward, out lowHit, wallCheckDistance);
         bool wallInFrontMid = Physics.SphereCast(midOrigin, sphereRadius, forward, out midHit, wallCheckDistance);
 
-        // Use the closest wall hit
+        // Prefer the nearer of low and mid hits as the primary wall sample.
         RaycastHit wallHit = lowHit;
         bool wallInFront = wallInFrontLow;
         if (wallInFrontMid && (!wallInFrontLow || midHit.distance < lowHit.distance))
@@ -241,150 +274,94 @@ public class ClimbingController : MonoBehaviour
 
         if (!wallInFront) return;
 
-        // Check wall height relative to player
+        // Reject walls that are too low or too high relative to the player.
         float wallHeightFromGround = wallHit.point.y - transform.position.y;
 
-        // Don't climb walls that are too low (player can just step up)
         if (wallHeightFromGround < 0.4f)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Wall too low to climb: {wallHeightFromGround:F2}m");
             return;
-        }
 
-        // Don't climb walls that are too high (above player's head)
         if (wallHeightFromGround > upCheckHeight + 0.3f)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Wall too high to climb: {wallHeightFromGround:F2}m (max: {upCheckHeight + 0.3f}m)");
             return;
-        }
 
-        /* Check for wall above - this is the key part for stepped walls */
-        // Raycast forward from above the wall to see if there's a wall further ahead
+        // Stepped walls: probe above the lip, then forward for a farther wall that can be climbed.
         Vector3 forwardRayOrigin = wallHit.point + Vector3.up * 1.0f;
         RaycastHit forwardWallHit;
         bool hasForwardWall = Physics.Raycast(forwardRayOrigin, forward, out forwardWallHit, 1.2f);
 
-        // Also check directly above the wall
         Vector3 aboveOrigin = wallHit.point + Vector3.up * 0.5f;
         RaycastHit aboveHit;
         bool hasWallAbove = Physics.Raycast(aboveOrigin, forward, out aboveHit, wallCheckDistance);
 
-        // Determine if we can climb (either no wall above, or there's a stepped wall further ahead)
+        // Decide between a simple lip climb and a stepped wall with a farther face.
         bool canClimb = false;
         float stepDepth = 0f;
 
         if (!hasWallAbove)
         {
-            // No wall above at all - easy climb
             canClimb = true;
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("No wall above - standard climb");
         }
         else if (hasForwardWall && forwardWallHit.distance > wallHit.distance + 0.2f)
         {
-            // There's a wall above, but also a wall further ahead (stepped)
             stepDepth = forwardWallHit.distance - wallHit.distance;
 
-            // Check if the stepped wall is too high
             float steppedWallHeight = forwardWallHit.point.y - transform.position.y;
             if (steppedWallHeight > upCheckHeight + 0.3f)
-            {
-                /* DEBUG OUTPUT (REMOVE LATER) */
-                Debug.Log($"Stepped wall too high: {steppedWallHeight:F2}m");
                 return;
-            }
 
             canClimb = true;
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Stepped wall detected! Step depth: {stepDepth:F2}m");
         }
 
         if (!canClimb)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("Wall continues above - cannot climb");
             return;
-        }
 
-        /* Find the top surface */
-        // Search from either the original wall or the forward wall
         Vector3 searchOrigin = hasForwardWall && stepDepth > 0.2f ? forwardWallHit.point : wallHit.point;
-        searchOrigin += forward * 0.1f; // Small forward offset
+        searchOrigin += forward * 0.1f;
 
+        // Scan upward from the wall to find the standable surface above the lip.
         RaycastHit topHit = new RaycastHit();
         bool foundSurface = false;
         float surfaceHeight = 0f;
 
-        // Cast upward to find where the wall ends, then raycast down
         for (float yOffset = 0.5f; yOffset <= 2.0f; yOffset += 0.3f)
         {
             Vector3 rayStart = searchOrigin + Vector3.up * yOffset;
 
             if (Physics.Raycast(rayStart, Vector3.down, out topHit, 2.0f))
             {
-                // Check if this surface is above the original wall
                 if (topHit.point.y > wallHit.point.y + 0.2f)
                 {
                     surfaceHeight = topHit.point.y;
                     foundSurface = true;
-                    /* DEBUG OUTPUT (REMOVE LATER) */
-                    Debug.Log($"Found surface at height: {surfaceHeight:F2}m");
                     break;
                 }
             }
         }
 
         if (!foundSurface)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log("No top surface found");
             return;
-        }
 
-        // Calculate total height the player needs to climb
         float totalClimbHeight = surfaceHeight - transform.position.y;
 
-        // Check if the climb height is reasonable
         if (totalClimbHeight > 1.5f)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Climb height too high: {totalClimbHeight:F2}m (max: 1.5m)");
             return;
-        }
 
         if (totalClimbHeight < 0.4f)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Climb height too low: {totalClimbHeight:F2}m - should just step up");
             return;
-        }
 
-        // Check if the surface is too steep
         float slopeAngle = Vector3.Angle(topHit.normal, Vector3.up);
         if (slopeAngle > 50f)
-        {
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Surface too steep: {slopeAngle:F2}�");
             return;
-        }
 
-        // Calculate target position
+        // Build mantle destination from climb height and whether a step was detected.
         if (totalClimbHeight < 0.8f)
         {
-            // For lower walls (waist/chest height), just do a quick vault
             climbTarget = topHit.point + Vector3.up * 0.1f;
-            climbTarget += forward * 0.5f; // Move further forward for vault
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Quick vault - height: {totalClimbHeight:F2}m");
+            climbTarget += forward * 0.5f;
         }
         else
         {
-            // For higher walls, do a full climb
             climbTarget = topHit.point + Vector3.up * 0.2f;
 
-            // Add forward offset based on situation
             if (hasForwardWall && stepDepth > 0.2f)
             {
                 climbTarget += forward * 0.3f;
@@ -393,31 +370,28 @@ public class ClimbingController : MonoBehaviour
             {
                 climbTarget += forward * 0.4f;
             }
-            /* DEBUG OUTPUT (REMOVE LATER) */
-            Debug.Log($"Full climb - height: {totalClimbHeight:F2}m");
         }
 
-        /* DEBUG OUTPUT (REMOVE LATER) */
-        Debug.Log($"CLIMB TRIGGERED - Wall height: {wallHeightFromGround:F2}m, Surface height: {surfaceHeight:F2}m, Total climb: {totalClimbHeight:F2}m");
         StartClimb();
     }
 
+    /// <summary>
+    /// Locks movement and computes the mantle path from climb height (single step vs. rise-then-forward).
+    /// </summary>
     void StartClimb()
     {
         isClimbing = true;
         climbStartPosition = transform.position;
 
-        // Simplify the climb for lower walls
         float totalClimbHeight = climbTarget.y - climbStartPosition.y;
 
+        // Short climbs go straight to target; tall climbs rise to mid height before moving forward.
         if (totalClimbHeight < 0.8f)
         {
-            // For quick vaults, just go straight to the target
             climbMidPoint = climbTarget;
         }
         else
         {
-            // For full climbs, create an arc
             Vector3 forward = transform.forward;
             Vector3 wallTop = climbTarget - forward;
             climbMidPoint = new Vector3(climbStartPosition.x, wallTop.y + clearanceHeight, climbStartPosition.z);
@@ -427,18 +401,18 @@ public class ClimbingController : MonoBehaviour
             movement.enabled = false;
 
         controller.enabled = false;
-
-        /* DEBUG OUTPUT (REMOVE LATER) */
-        Debug.Log($"MANTLE STARTED - Type: {(totalClimbHeight < 0.8f ? "Quick vault" : "Full climb")}");
     }
 
+    /// <summary>
+    /// Lerps the player toward the mantle target each frame until the climb finishes.
+    /// </summary>
     void PerformMantle()
     {
         float totalClimbHeight = climbTarget.y - climbStartPosition.y;
 
+        // Short mantles: move directly to the ledge stand position.
         if (totalClimbHeight < 0.8f)
         {
-            // Simple linear climb for quick vaults
             transform.position = Vector3.MoveTowards(transform.position, climbTarget, climbSpeed * Time.deltaTime);
 
             if (Vector3.Distance(transform.position, climbTarget) < 0.05f)
@@ -448,7 +422,7 @@ public class ClimbingController : MonoBehaviour
         }
         else
         {
-            // Arced climb for higher walls
+            // Tall mantles: rise to mid height with clearance before finishing on the ledge.
             Vector3 upwardTarget = new Vector3(climbStartPosition.x, climbMidPoint.y, climbStartPosition.z);
             transform.position = Vector3.MoveTowards(
                 transform.position,
@@ -463,6 +437,9 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Restores CharacterController and PlayerMovement after a mantle completes.
+    /// </summary>
     void FinishClimb()
     {
         isClimbing = false;
@@ -471,13 +448,11 @@ public class ClimbingController : MonoBehaviour
         if (movement != null)
             movement.ResetVerticalVelocity();
         movement.enabled = true;
-
-        /* DEBUG OUTPUT (REMOVE LATER) */
-        Debug.Log("MANTLE COMPLETE");
     }
 
-    // Returns true when a Climbable-tagged surface is in front of the player. In that case
-    // the mantle should not be considered, even if cling itself didn't start this frame
+    /// <summary>
+    /// Returns true when a Climbable-tagged surface is in front, reserving it from mantle logic even if cling did not start.
+    /// </summary>
     bool TryHandleClimbableWall()
     {
         if (!DetectForwardWall(out RaycastHit hit) && !DetectNearestClimbableWall(out hit))
@@ -492,14 +467,16 @@ public class ClimbingController : MonoBehaviour
             return true;
         }
 
-        // Grounded players should not engage the wall-climb system - lets them run up to
-        // fences without sticking. Airborne players still claim climbables for cling/mantle routing
+        // Grounded players skip cling so they can run up to fences without sticking.
         if (controller.isGrounded)
             return false;
 
         return true;
     }
 
+    /// <summary>
+    /// Spherecasts forward at low and mid height and returns the nearer Climbable hit.
+    /// </summary>
     bool DetectForwardWall(out RaycastHit hit)
     {
         Vector3 forward = transform.forward;
@@ -526,8 +503,9 @@ public class ClimbingController : MonoBehaviour
         return false;
     }
 
-    // At concave corners the player often does not face the wall directly; check all
-    // horizontal directions for the nearest climbable surface facing the player.
+    /// <summary>
+    /// At concave corners, searches horizontal directions for the nearest climbable surface facing the player.
+    /// </summary>
     bool DetectNearestClimbableWall(out RaycastHit hit)
     {
         hit = default;
@@ -572,22 +550,26 @@ public class ClimbingController : MonoBehaviour
         return bestDistance < float.MaxValue;
     }
 
+    /// <summary>
+    /// True when airborne, off cooldown, upright enough, and pressing or moving forward into the wall.
+    /// </summary>
     bool CanStartWallCling(RaycastHit hit)
     {
         if (controller.isGrounded) return false;
         if (clingCooldownTimer > 0f) return false;
         if (movement != null && movement.getIsCrouching()) return false;
 
-        // Surface must be roughly vertical so wall-space basis vectors are stable
         float tiltFromVertical = Mathf.Abs(Vector3.Angle(hit.normal, Vector3.up) - 90f);
         if (tiltFromVertical > maxWallTiltFromVertical) return false;
 
-        // Player must be actively moving / pressing toward the wall to grip it
         bool forwardPressed = Keyboard.current != null && Keyboard.current.wKey.isPressed;
         bool forwardVelocity = movement != null && movement.GetForwardVelocity() > 0.1f;
         return forwardPressed || forwardVelocity;
     }
 
+    /// <summary>
+    /// Attaches the player to a climbable wall, snapping offset and pausing normal movement.
+    /// </summary>
     void StartWallCling(RaycastHit hit)
     {
         isWallClinging = true;
@@ -599,8 +581,6 @@ public class ClimbingController : MonoBehaviour
 
         RecenterWallClingYaw(smooth: false);
 
-        // Snap to a consistent horizontal offset from the wall surface; preserve current Y
-        // so the player doesn't pop vertically when gripping
         Vector3 contact = hit.point;
         Vector3 snappedPos = new Vector3(
             contact.x + wallNormal.x * wallClingDistance,
@@ -611,40 +591,34 @@ public class ClimbingController : MonoBehaviour
         transform.position = snappedPos;
         controller.enabled = true;
 
-        // Hand off control: pause normal movement and kill vertical velocity so we don't
-        // accumulate gravity while attached
         if (movement != null)
         {
             movement.ResetVerticalVelocity();
             movement.enabled = false;
         }
-
-        /* DEBUG OUTPUT (REMOVE LATER) */
-        Debug.Log($"WALL CLING STARTED on {hit.collider.name}");
     }
 
+    /// <summary>
+    /// Updates wall cling movement, surface attachment, and top-out detach logic.
+    /// </summary>
     void PerformWallCling()
     {
-        // Detach on jump (Space)
         if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             DetachFromWall(jumpOff: true);
             return;
         }
 
-        // Build wall-space basis. wallUp is the world up projected onto the wall plane
-        // wallRight is along the wall surface, perpendicular to wallNormal and wallUp
+        // Build wall-aligned up/right axes and read WASD input for cling motion.
         Vector3 wallUp = Vector3.ProjectOnPlane(Vector3.up, wallNormal);
         if (wallUp.sqrMagnitude < 0.0001f)
         {
-            // Surface degenerated to floor/ceiling - bail
             DetachFromWall(jumpOff: false);
             return;
         }
         wallUp.Normalize();
 
         Vector3 wallRight = Vector3.Cross(wallUp, wallNormal).normalized;
-        // Make A/D match the player's perceived left/right regardless of which way the cross resolves
         if (Vector3.Dot(wallRight, transform.right) < 0f)
             wallRight = -wallRight;
 
@@ -658,6 +632,7 @@ public class ClimbingController : MonoBehaviour
         bool movingUp = input.y > 0.15f;
         bool nearWallTop = IsNearWallTop(wallUp, wallRight);
 
+        // Multi-probe surface solve and corner-wrap classification for this frame.
         bool hasSurface = SolveWallSurface(wallUp, wallRight, input, out RaycastHit surfaceHit, out float contactStrength, out CornerWrapKind cornerWrap);
 
         bool toppingOut = movingUp && (nearWallTop || !hasSurface);
@@ -675,6 +650,7 @@ public class ClimbingController : MonoBehaviour
                 limitWallPullForTopOut: toppingOut);
         }
 
+        // Top-out grace: keep moving up briefly past the lip before detaching.
         if (toppingOut)
         {
             topOutTimer += Time.deltaTime;
@@ -693,6 +669,7 @@ public class ClimbingController : MonoBehaviour
             HandleWallSurfaceLost(input);
         }
 
+        // Scale horizontal/vertical cling speed by contact grip (full during top-out).
         float grip = toppingOut
             ? 1f
             : hasSurface
@@ -703,7 +680,7 @@ public class ClimbingController : MonoBehaviour
         if (toppingOut && wallClingTopOutUpBoost > 0f)
             controller.Move(wallUp * wallClingTopOutUpBoost * Time.deltaTime);
 
-        // After moving, confirm we are still on a surface (stops sideways drift in open air)
+        // Re-probe after motion to re-attach when drifting sideways off the face in open air.
         if (!hasSurface
             && SolveWallSurface(wallUp, wallRight, input, out surfaceHit, out contactStrength, out cornerWrap))
         {
@@ -726,9 +703,12 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
-    // True when lower body probes still see the wall but upper probes do not - player is at the top lip
+    /// <summary>
+    /// True when lower probes still see the wall but upper probes do not (player is at the top lip).
+    /// </summary>
     bool IsNearWallTop(Vector3 wallUp, Vector3 wallRight)
     {
+        // Top lip: lower probes still hit the wall but the highest probe does not.
         bool upperContact = HasForwardWallContact(WallProbeHeights[WallProbeHeights.Length - 1], wallUp, wallRight);
         if (upperContact)
             return false;
@@ -742,6 +722,9 @@ public class ClimbingController : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// True when a climbable hit at the given height scores as valid forward wall contact.
+    /// </summary>
     bool HasForwardWallContact(float probeHeight, Vector3 wallUp, Vector3 wallRight)
     {
         Vector3 origin = transform.position + Vector3.up * probeHeight;
@@ -758,8 +741,9 @@ public class ClimbingController : MonoBehaviour
         return ScoreWallHit(hit, wallUp, wallRight, out _, lateralLimitScale: 1.35f);
     }
 
-    // Multi-probe surface solver: chest/waist/head samples, corner fan, and lateral
-    // ahead casts. Picks the best valid hit and returns an aggregate contact strength
+    /// <summary>
+    /// Multi-probe surface solver using chest, waist, and head samples plus corner-wrap probes.
+    /// </summary>
     bool SolveWallSurface(
         Vector3 wallUp,
         Vector3 wallRight,
@@ -775,6 +759,7 @@ public class ClimbingController : MonoBehaviour
         float bestScore = -1f;
         int forwardValidProbes = 0;
 
+        // Phase 1: forward fan at waist, chest, and head along the current smoothed normal.
         Vector3 primaryDir = -smoothedWallNormal;
 
         for (int i = 0; i < WallProbeHeights.Length; i++)
@@ -797,6 +782,7 @@ public class ClimbingController : MonoBehaviour
         float sideInput = input.x;
         float forwardBestScore = bestScore;
 
+        // Phase 2: when strafing (or approaching an inside corner), probe outside and inside wrap paths.
         if (TryGetCornerMoveDirection(wallRight, input, out Vector3 moveAlongWall))
         {
             ProbeOutsideCornerWrap(wallUp, wallRight, moveAlongWall, ref bestScore, ref bestHit);
@@ -822,12 +808,14 @@ public class ClimbingController : MonoBehaviour
         if (bestScore < 0f)
             return false;
 
+        // Boost contact strength when multiple forward probes agree on the same face.
         contactStrength = bestScore;
         if (forwardValidProbes >= 2)
             contactStrength = Mathf.Max(contactStrength, 0.68f);
         else if (forwardValidProbes >= 1)
             contactStrength = Mathf.Max(contactStrength, 0.48f);
 
+        // Infer outside vs. inside wrap from normal change when strafing around a corner.
         if (cornerWrap == CornerWrapKind.None)
         {
             bool faceChanged = Vector3.Angle(smoothedWallNormal, bestHit.normal) > 5f
@@ -842,6 +830,9 @@ public class ClimbingController : MonoBehaviour
         return contactStrength >= wallClingMinContactStrength;
     }
 
+    /// <summary>
+    /// Picks the concave adjacent face when its score beats forward contact or the angle warrants a transfer.
+    /// </summary>
     static bool ShouldPreferInsideCornerFace(
         RaycastHit insideHit,
         Vector3 moveAlongWall,
@@ -866,8 +857,12 @@ public class ClimbingController : MonoBehaviour
         return insideScore >= forwardScore * 0.72f;
     }
 
+    /// <summary>
+    /// Fans probes around an outside (convex) corner and samples ahead for the next climbable face.
+    /// </summary>
     void ProbeOutsideCornerWrap(Vector3 wallUp, Vector3 wallRight, Vector3 moveAlongWall, ref float bestScore, ref RaycastHit bestHit)
     {
+        // Slerp from current normal toward the strafe direction across a multi-step fan.
         Vector3 primaryDir = -smoothedWallNormal;
         Vector3 bentTarget = (-smoothedWallNormal + moveAlongWall * 0.95f).normalized;
         int steps = Mathf.Max(wallCornerProbeSteps, 3);
@@ -902,6 +897,7 @@ public class ClimbingController : MonoBehaviour
             }
         }
 
+        // Ahead sample past the corner edge for a direct hit on the new outside face.
         Vector3 aheadOrigin = transform.position
                               + moveAlongWall * wallClingCornerProbeAhead
                               + Vector3.up * 1.0f;
@@ -910,6 +906,9 @@ public class ClimbingController : MonoBehaviour
         TryCornerAheadProbes(aheadOrigin, towardWall, wallUp, wallRight, insideCorner: false, ref bestScore, ref bestHit);
     }
 
+    /// <summary>
+    /// Probes perpendicular faces, inward fans, and bisector rays to wrap concave (inside) corners.
+    /// </summary>
     void ProbeInsideCornerWrap(
         Vector3 wallUp,
         Vector3 wallRight,
@@ -917,7 +916,7 @@ public class ClimbingController : MonoBehaviour
         ref float bestScore,
         ref RaycastHit bestHit)
     {
-        // Primary inside-corner cast: straight toward the perpendicular wall the player is walking into
+        // Perpendicular casts at increasing depth to find the adjacent inside face.
         float[] aheadSamples = { 0.08f, 0.2f, 0.35f, 0.5f };
         for (int a = 0; a < aheadSamples.Length; a++)
         {
@@ -939,6 +938,7 @@ public class ClimbingController : MonoBehaviour
             }
         }
 
+        // Inward fan from current normal toward the corner bisector for concave wrap hits.
         Vector3 primaryDir = -smoothedWallNormal;
         Vector3 bentTarget = (-smoothedWallNormal - moveAlongWall * 0.95f).normalized;
         int steps = Mathf.Max(wallCornerProbeSteps, 3);
@@ -973,6 +973,7 @@ public class ClimbingController : MonoBehaviour
             }
         }
 
+        // Ahead and bisector samples deep in the concave pocket for a stable inside-face grip.
         Vector3 aheadOrigin = transform.position
                               + moveAlongWall * wallClingCornerProbeAhead
                               + Vector3.up * 1.0f;
@@ -1018,6 +1019,9 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// True when the hit is a climbable face on the far side of a concave corner relative to strafe direction.
+    /// </summary>
     bool IsInsideAdjacentFace(RaycastHit hit, Vector3 moveAlongWall, out float score)
     {
         score = 0f;
@@ -1034,6 +1038,9 @@ public class ClimbingController : MonoBehaviour
         return ScoreInsideCornerFaceHit(hit, angleFromCurrent, out score);
     }
 
+    /// <summary>
+    /// Scores an inside-corner face by angle from current normal, cling distance, and facing toward the player.
+    /// </summary>
     bool ScoreInsideCornerFaceHit(RaycastHit hit, float angleFromCurrent, out float score)
     {
         score = 0f;
@@ -1047,6 +1054,7 @@ public class ClimbingController : MonoBehaviour
         if (distError > 0.95f)
             return false;
 
+        // Weight angle, cling distance, and facing for inside-corner face selection.
         float angleScore = Mathf.Clamp01((angleFromCurrent - 30f) / 60f);
         float distScore = 1f - distError / 0.95f;
         float facingScore = Mathf.Clamp01(facing / 0.25f);
@@ -1054,6 +1062,9 @@ public class ClimbingController : MonoBehaviour
         return score > 0.1f;
     }
 
+    /// <summary>
+    /// Multi-height probes from a point past the corner toward the next climbable face.
+    /// </summary>
     void TryCornerAheadProbes(
         Vector3 aheadOrigin,
         Vector3 towardWall,
@@ -1087,6 +1098,9 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Resolves strafe direction from A/D, or an auto-detected approach vector for inside corners while climbing up.
+    /// </summary>
     bool TryGetCornerMoveDirection(Vector3 wallRight, Vector2 input, out Vector3 moveAlongWall)
     {
         if (Mathf.Abs(input.x) > 0.08f)
@@ -1102,6 +1116,9 @@ public class ClimbingController : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// When moving up without strafe input, finds the nearest perpendicular inside face to approach.
+    /// </summary>
     bool TryFindInsideCornerApproach(Vector3 wallRight, out Vector3 moveAlongWall)
     {
         moveAlongWall = default;
@@ -1147,6 +1164,9 @@ public class ClimbingController : MonoBehaviour
         return nearest < float.MaxValue;
     }
 
+    /// <summary>
+    /// Labels a face change as inside or outside based on whether the new normal faces into the strafe direction.
+    /// </summary>
     static CornerWrapKind ClassifyCornerWrap(Vector3 previousNormal, Vector3 newNormal, Vector3 moveAlongWall)
     {
         if (Vector3.Dot(newNormal, moveAlongWall) < -0.12f)
@@ -1155,6 +1175,9 @@ public class ClimbingController : MonoBehaviour
         return CornerWrapKind.Outside;
     }
 
+    /// <summary>
+    /// Spherecasts toward the wall and accepts only hits on colliders tagged as climbable.
+    /// </summary>
     bool TryClimbableProbe(Vector3 origin, Vector3 direction, out RaycastHit hit)
     {
         float probeDistance = wallClingDistance + 0.45f;
@@ -1176,6 +1199,9 @@ public class ClimbingController : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// SphereCastAll along a direction and returns the best-scoring valid inside-corner adjacent hit.
+    /// </summary>
     bool TryBestInsideProbeHit(
         Vector3 origin,
         Vector3 direction,
@@ -1218,12 +1244,18 @@ public class ClimbingController : MonoBehaviour
         return bestScore > 0f;
     }
 
+    /// <summary>
+    /// True when the surface normal is within maxWallTiltFromVertical of a vertical wall.
+    /// </summary>
     bool IsValidClimbableWall(Vector3 normal)
     {
         float tiltFromVertical = Mathf.Abs(Vector3.Angle(normal, Vector3.up) - 90f);
         return tiltFromVertical <= maxWallTiltFromVertical;
     }
 
+    /// <summary>
+    /// Scores a wall hit by lateral offset along the face, cling distance error, and facing toward the chest.
+    /// </summary>
     bool ScoreWallHit(RaycastHit hit, Vector3 wallUp, Vector3 wallRight, out float score, float lateralLimitScale = 1f)
     {
         score = 0f;
@@ -1232,7 +1264,7 @@ public class ClimbingController : MonoBehaviour
 
         Vector3 chest = transform.position + Vector3.up * 1.0f;
 
-        // Surface must face the player (reject grazing hits past an open edge)
+        // Reject hits too far sideways, too deep/shallow, or facing away from the player.
         float facing = Vector3.Dot(chest - hit.point, hit.normal);
         if (facing < 0.1f)
             return false;
@@ -1249,6 +1281,7 @@ public class ClimbingController : MonoBehaviour
         if (distError > 0.38f)
             return false;
 
+        // Combined lateral, distance, and facing score for forward wall contact.
         float lateralScore = 1f - lateral / lateralLimit;
         float distScore = 1f - distError / 0.38f;
         float facingScore = Mathf.Clamp01(facing / 0.35f);
@@ -1256,6 +1289,9 @@ public class ClimbingController : MonoBehaviour
         return score > 0.12f;
     }
 
+    /// <summary>
+    /// True when nothing blocks the path from chest height to the target cling offset on the new face.
+    /// </summary>
     bool IsWrapPathClear(RaycastHit targetHit, bool insideCorner)
     {
         Vector3 start = transform.position + Vector3.up * 1.0f;
@@ -1274,7 +1310,7 @@ public class ClimbingController : MonoBehaviour
 
         if (insideCorner)
         {
-            // Concave wrap passes through the other climbable face at the corner
+            // Concave wrap may pass through the other climbable face at the corner.
             if (block.collider != null && block.collider.CompareTag(climbableTag))
                 return true;
 
@@ -1287,6 +1323,9 @@ public class ClimbingController : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// Blends wall normal, applies corner arc nudges, and pulls the player to the correct cling offset.
+    /// </summary>
     void ApplySmoothWallAttachment(
         RaycastHit hit,
         float contactStrength,
@@ -1303,6 +1342,7 @@ public class ClimbingController : MonoBehaviour
 
         bool insideTransition = cornerWrap == CornerWrapKind.Inside;
 
+        // Blend attach normal faster but capped while rounding a corner.
         float blendT = 1f - Mathf.Exp(-wallNormalBlendSpeed * Time.deltaTime);
         if (roundingCorner)
             blendT = Mathf.Min(blendT * (insideTransition ? 1.6f : 1.35f), insideTransition ? 0.28f : 0.22f);
@@ -1310,6 +1350,7 @@ public class ClimbingController : MonoBehaviour
         smoothedWallNormal = Vector3.Slerp(smoothedWallNormal, hit.normal, blendT).normalized;
         wallNormal = smoothedWallNormal;
 
+        // Subtle arc motion along outside tangents or into inside corners while strafing.
         if (roundingCorner && Mathf.Abs(input.x) > 0.08f)
         {
             float arcWeight = Mathf.Clamp01(Vector3.Angle(normalBeforeMove, hit.normal) / 90f);
@@ -1334,6 +1375,7 @@ public class ClimbingController : MonoBehaviour
             }
         }
 
+        // Pull toward cling distance along the face normal (reduced while topping out upward).
         Vector3 pullNormal = insideTransition ? hit.normal : smoothedWallNormal;
         float maxPull = insideTransition ? wallMaxOffsetPullPerFrame * 2.2f : wallMaxOffsetPullPerFrame;
         float pullSpeed = insideTransition ? wallOffsetPullSpeed * 1.35f : wallOffsetPullSpeed;
@@ -1359,6 +1401,9 @@ public class ClimbingController : MonoBehaviour
         RecenterWallClingYaw(smooth: true);
     }
 
+    /// <summary>
+    /// Updates wallClingYawCenter (and snap rotation when not smooth) to face away from the wall.
+    /// </summary>
     void RecenterWallClingYaw(bool smooth)
     {
         Vector3 faceWall = Vector3.ProjectOnPlane(-smoothedWallNormal, Vector3.up);
@@ -1380,6 +1425,9 @@ public class ClimbingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Accumulates offSurfaceTimer and detaches when air grace expires without re-acquiring a face.
+    /// </summary>
     void HandleWallSurfaceLost(Vector2 input)
     {
         offSurfaceTimer += Time.deltaTime;
@@ -1388,6 +1436,9 @@ public class ClimbingController : MonoBehaviour
             DetachFromWall(jumpOff: false);
     }
 
+    /// <summary>
+    /// Drains sprint stamina while moving on the wall and detaches when stamina is empty.
+    /// </summary>
     void ApplyWallClimbStaminaDrain(Vector2 input)
     {
         if (movement == null || wallClimbStaminaDrainRate <= 0f)
@@ -1402,6 +1453,9 @@ public class ClimbingController : MonoBehaviour
             DetachFromWall(jumpOff: false);
     }
 
+    /// <summary>
+    /// Releases wall cling, restores movement, and optionally applies a jump-off push.
+    /// </summary>
     void DetachFromWall(bool jumpOff)
     {
         isWallClinging = false;
@@ -1411,22 +1465,18 @@ public class ClimbingController : MonoBehaviour
         clingCooldownTimer = wallClingReattachCooldown;
 
         if (jumpOff)
-        {
-            // Brief outward shove so the player visibly pushes off and the cooldown
-            // keeps them from immediately re-gripping the same surface
             controller.Move(smoothedWallNormal * wallClingJumpOffPush);
-        }
 
         if (movement != null)
         {
             movement.ResetVerticalVelocity();
             movement.enabled = true;
         }
-
-        /* DEBUG OUTPUT (REMOVE LATER) */
-        Debug.Log($"WALL CLING ENDED (jumpOff={jumpOff})");
     }
 
+    /// <summary>
+    /// Reads WASD as a -1..1 move vector for wall-cling input (keyboard fallback).
+    /// </summary>
     Vector2 ReadMoveInput()
     {
         Vector2 v = Vector2.zero;

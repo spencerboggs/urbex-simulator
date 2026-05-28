@@ -3,13 +3,16 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Debug = UnityEngine.Debug;
 
+/// <summary>
+/// CharacterController movement, sprint stamina, jump, and optional crouch.
+/// </summary>
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement")]
-    // Base movement speed in units per second
+    /// <summary>Base movement speed in units per second.</summary>
     public float moveSpeed = 2.5f;
-    // Sprint speed multiplier
+    /// <summary>Sprint speed multiplier when not using backpack-specific values.</summary>
     public float sprintMultiplier = 2.5f;
 
     [Header("Backpack (affects sprint)")]
@@ -23,44 +26,45 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Sprint multiplier when wearing a backpack.")]
     [SerializeField]
     private float _sprintMultiplierWithBackpack = 2.3f;
-    // Height the player can jump
+    /// <summary>Jump apex height in world units.</summary>
     public float jumpHeight = 1.8f;
-    // Gravity force applied to the player
+    /// <summary>Gravity acceleration applied each frame.</summary>
     public float gravity = -20f;
 
     [Header("Sprint System")]
-    // Maximum sprint charge available
+    /// <summary>Maximum sprint charge.</summary>
     public float maxSprintCharge = 10f;
-    // Rate at which sprint charge depletes when sprinting
+    /// <summary>Sprint charge drained per second while sprinting and moving.</summary>
     public float sprintDrainRate = 1.5f;
-    // Rate at which sprint charge regenerates when not sprinting
+    /// <summary>Sprint charge restored per second while grounded and not sprinting.</summary>
     public float sprintRegenRate = 1f;
-    // Minimum sprint charge required to start sprinting
+    /// <summary>Minimum charge required before sprint can start again after exhaustion.</summary>
     public float minSprintRequired = 3f;
-    // No stamina jump multiplier (percentage of normal jump height when stamina is depleted)
+    /// <summary>Jump height multiplier when exhausted (low stamina).</summary>
     public float noStaminaJumpMultiplier = 0.75f;
-    // Stamina decay jump multiplier (how much percent stamina is lost when jumping)
+    /// <summary>Fraction of max sprint charge removed on each jump.</summary>
     public float jumpStaminaCostPercent = 0.1f;
 
-    // Current sprint charge level
+    /// <summary>Current sprint stamina charge (0 to maxSprintCharge).</summary>
     private float sprintCharge;
-    // Whether the player is currently exhausted (unable to sprint)
+    /// <summary>True when charge hit zero and sprint cannot start until minSprintRequired.</summary>
     private bool exhausted = false;
 
     [Header("Feel")]
-    // Small downward force to keep the player grounded when walking down slopes
+    /// <summary>Small downward velocity while grounded to stay on slopes.</summary>
     public float groundedStickForce = -2f;
-    // Multiplier for horizontal control while in the air (0 = no control, 1 = full control)
+    /// <summary>Horizontal input scale while airborne (0 = none, 1 = full).</summary>
     public float airControlMultiplier = 0.6f;
-    // Multiplier for gravity when the player is falling (makes jumps feel snappier)
+    /// <summary>Extra gravity scale while falling.</summary>
     public float fallMultiplier = 1.05f;
 
-    // Internal state
+    /// <summary>Cached CharacterController on this GameObject.</summary>
     private CharacterController controller;
+    /// <summary>World velocity applied each frame (horizontal from input, vertical from gravity/jump).</summary>
     private Vector3 velocity;
 
     [Header("Crouch")]
-    // Multiplier for crouch height (scale factor)
+    /// <summary>Standing height scale when crouched.</summary>
     public float crouchHeightMultiplier = 0.5f;
 
     [SerializeField]
@@ -79,113 +83,92 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField]
     private float _standCheckIgnoreBelowFeet = 0.15f;
 
-    // Original height of the character controller capsule
+    /// <summary>Standing capsule height captured at Start.</summary>
     private float originalHeight;
-    // Current height of the character controller capsule when crouching
+    /// <summary>Crouched capsule height derived from originalHeight.</summary>
     private float crouchHeight;
-    // Whether the player is currently crouching
+    /// <summary>Whether the player is currently in a crouched pose.</summary>
     private bool isCrouching;
 
-    /* HUD Elements */
-    // public PlayerHUD hud;
-
+    /// <summary>Caches controller, sprint charge, and crouch height baselines.</summary>
     void Start()
     {
-        // Get reference to the CharacterController component
         controller = GetComponent<CharacterController>();
-        // Initialize sprint charge to max at the start
         sprintCharge = maxSprintCharge;
-        // Store the original height of the character controller for crouching calculations
         originalHeight = controller.height;
-        // Calculate the crouch height based on the original height and the crouch multiplier
         crouchHeight = originalHeight * crouchHeightMultiplier;
     }
 
+    /// <summary>Handles movement input, sprint stamina, jump, crouch, gravity, and CharacterController motion.</summary>
     void Update()
     {
-        // Check if the player is grounded
         bool isGrounded = controller.isGrounded;
 
-        // If grounded and "falling", apply a small downward force to keep the player "stuck" to the ground
+        // Stick to ground on slopes when grounded and not rising.
         if (isGrounded && velocity.y < 0)
             velocity.y = groundedStickForce;
 
-        /* Input handling */
+        // WASD input in local space.
         Vector2 moveInput = Vector2.zero;
 
-        // Read movement input from WASD keys
         if (Keyboard.current.wKey.isPressed) moveInput.y += 1;
         if (Keyboard.current.sKey.isPressed) moveInput.y -= 1;
         if (Keyboard.current.dKey.isPressed) moveInput.x += 1;
         if (Keyboard.current.aKey.isPressed) moveInput.x -= 1;
 
-        // Set control vector to zero if no input to prevent unintended movement
         Vector3 noMovement = new Vector3(0f, 0f, 0f);
 
-        // Normalize movement input to prevent faster diagonal movement
         Vector3 moveDir =
             (transform.right * moveInput.x +
              transform.forward * moveInput.y).normalized;
 
-        /* Sprint handling */
-        // Check if the player is trying to sprint (holding Left Shift)
+        // Sprint stamina: exhaust at zero, allow restart after minSprintRequired.
         bool wantsToSprint = Keyboard.current.leftShiftKey.isPressed;
 
-        // Exhaustion logic
         if (sprintCharge <= 0f)
             exhausted = true;
 
         if (sprintCharge >= minSprintRequired)
             exhausted = false;
 
-        // Player can sprint if they want to sprint and are not exhausted
         bool canStartSprint = !exhausted;
-        // Final sprinting state
         bool isSprinting = wantsToSprint && canStartSprint && !isCrouching;
-        // Apply sprint multiplier to movement speed if sprinting
         float sprintMult = _hasBackpack ? _sprintMultiplierWithBackpack : _sprintMultiplierNoBackpack;
         float currentSpeed = moveSpeed * (isSprinting ? sprintMult : 1f);
 
-        // Charge and drain logic
+        // Drain sprint while moving; regen on ground when not sprinting.
         if (isSprinting && !noMovement.Equals(moveDir))
         {
-            // Drain sprint charge when sprinting and moving
             sprintCharge -= sprintDrainRate * Time.deltaTime;
         }
         else if (isGrounded)
         {
-            // Regenerate only on the ground so falling or climbing off a wall does not refill stamina mid-air
+            // Regenerate only on the ground so falling or climbing does not refill stamina mid-air.
             sprintCharge += sprintRegenRate * Time.deltaTime;
         }
 
-        // Clamp sprint charge to valid range
         sprintCharge = Mathf.Clamp(sprintCharge, 0f, maxSprintCharge);
 
-        /* Jump handling */
-        // Check if the player is trying to jump (pressing Space) and is grounded
+        // Jump: weaker apex when exhausted; otherwise costs a fraction of max charge.
         if (Keyboard.current.spaceKey.isPressed && isGrounded)
         {
             if (exhausted)
             {
-                // Jump 0.75 height if sprint charge is low to allow for some mobility even when exhausted
                 velocity.y = jumpHeight * noStaminaJumpMultiplier * Mathf.Sqrt(-gravity);
             }
             else
             {
-                // Calculate the initial jump velocity
                 velocity.y = jumpHeight * Mathf.Sqrt(-gravity);
-                // Subtract a small amount from the stamina to prevent infinite jumping
                 sprintCharge = Mathf.Max(0f, sprintCharge - maxSprintCharge * jumpStaminaCostPercent);
             }
             
         }
 
-        // If the player hits their head on something while jumping, reset vertical velocity
+        // Cancel upward velocity when hitting a ceiling.
         if (controller.collisionFlags.HasFlag(CollisionFlags.Above) && velocity.y > 0)
             velocity.y = 0f;
 
-        /* Crouch handling */
-        // Check if the player is trying to crouch (holding Left Ctrl)
+        // Crouch: hold to crouch, release when headroom allows (disabled via _crouchEnabled).
         bool crouchInput = _crouchEnabled && Keyboard.current.leftCtrlKey.isPressed;
 
         if (!_crouchEnabled)
@@ -196,66 +179,54 @@ public class PlayerMovement : MonoBehaviour
         else if (!crouchInput && isCrouching && HasStandingClearance())
             isCrouching = false;
 
-        // Mid-stand lerp lost headroom (moving ceiling or bad sample): snap intent back to crouched until clear
+        // Lost headroom during stand lerp: stay crouched until clear.
         if (!crouchInput && !isCrouching &&
             controller.height > crouchHeight + 0.02f &&
             controller.height < originalHeight - 0.02f &&
             !HasStandingClearance())
             isCrouching = true;
 
-        // Apply crouch/stand changes to the character controller height and center
         float targetHeight = (_crouchEnabled && isCrouching) ? crouchHeight : originalHeight;
 
-        // compute height delta BEFORE applying
+        // Lerp capsule height and adjust center/scale for crouch pose.
         float previousHeight = controller.height;
 
         controller.height = Mathf.Lerp(controller.height, targetHeight, Time.deltaTime * 15f);
         if (_crouchEnabled && isCrouching)
         {
-            // When crouching, we want to lower the center to keep the bottom of the capsule fixed
             controller.center = new Vector3(0f, controller.height / 2f - 0.4f, 0f);
-            // Scale the player down visually (optional, can be removed if not desired)
             transform.localScale = new Vector3(1f, crouchHeightMultiplier, 1f);
         }
         else
         {
-            // When standing up, reset the scale and adjust the center to keep the bottom fixed
             transform.localScale = Vector3.one;
-            // Adjust center to keep bottom fixed when standing up
             controller.center = new Vector3(0f, 0f, 0f);
         }
 
-        // Keep bottom of capsule fixed to ground
         float heightDiff = controller.height - previousHeight;
         controller.center += new Vector3(0f, heightDiff / 2f, 0f);
 
-        /* Gravity application */
+        // Gravity with extra pull while falling; horizontal move with air control scaling.
         float gravityScale = (velocity.y < 0) ? fallMultiplier : 1f;
         velocity.y += gravity * gravityScale * Time.deltaTime;
 
-        /* Movement application */
-        // Apply air control multiplier if not grounded
         float control = isGrounded ? 1f : airControlMultiplier;
-        // Calculate horizontal movement based on input, current speed, and control multiplier
         Vector3 horizontalMove = moveDir * currentSpeed * control;
 
-        // Store horizontal velocity for external access
         velocity.x = horizontalMove.x;
         velocity.z = horizontalMove.z;
 
-        // Combine horizontal movement with vertical velocity for final movement vector
+        // Combine horizontal and vertical velocity for CharacterController.Move.
         Vector3 finalMove =
             horizontalMove +
             new Vector3(0, velocity.y, 0);
 
-        // Move the character controller based on the final movement vector
         controller.Move(finalMove * Time.deltaTime);
-
-        /* HUD Updates */
-        // hud.SetStamina(sprintCharge / maxSprintCharge);
     }
 
-    // True if a full-height capsule at the current feet position would not overlap geometry (excluding this controller)
+    /// <summary>
+    /// Returns whether a full-height capsule at the current feet position would not overlap blocking geometry.
+    /// </summary>
     private bool HasStandingClearance()
     {
         GetCapsuleBottomWorld(out Vector3 feetWorld);
@@ -274,6 +245,7 @@ public class PlayerMovement : MonoBehaviour
 
         float ignoreBelowY = feetWorld.y + _standCheckIgnoreBelowFeet;
 
+        // Reject overlaps that are self, child hierarchy, or floor under feet.
         for (int i = 0; i < overlaps.Length; i++)
         {
             Collider c = overlaps[i];
@@ -281,7 +253,7 @@ public class PlayerMovement : MonoBehaviour
                 continue;
             if (c.transform.IsChildOf(transform) || transform.IsChildOf(c.transform))
                 continue;
-            // Floor / ground the capsule rests on; do not treat as overhead obstruction
+            // Ignore floor colliders the capsule rests on.
             if (c.bounds.max.y < ignoreBelowY)
                 continue;
             return false;
@@ -290,7 +262,7 @@ public class PlayerMovement : MonoBehaviour
         return true;
     }
 
-    // Inner line for Physics.CheckCapsule / OverlapCapsule: hemisphere centers for a vertical capsule of given height and radius, feet fixed at current capsule bottom
+    /// <summary>Builds world-space standing capsule sphere centers and radius for overlap checks.</summary>
     private void GetStandingCapsuleWorld(out Vector3 bottomSphereCenter, out Vector3 topSphereCenter, out float radius)
     {
         radius = controller.radius - _standClearanceSkin;
@@ -306,6 +278,7 @@ public class PlayerMovement : MonoBehaviour
         topSphereCenter = capsuleBottomWorld + up * (standHeight - radius);
     }
 
+    /// <summary>Computes the world-space bottom of the current CharacterController capsule.</summary>
     private void GetCapsuleBottomWorld(out Vector3 capsuleBottomWorld)
     {
         Vector3 worldCenter = transform.TransformPoint(controller.center);
@@ -313,30 +286,32 @@ public class PlayerMovement : MonoBehaviour
         capsuleBottomWorld = worldCenter - transform.up * halfExtents;
     }
 
-    // Get method for other scripts to check if the player is currently crouching
+    /// <summary>Whether the player is currently crouching.</summary>
     public bool getIsCrouching() => isCrouching;
 
-    // Get method to retrieve the player's current sprint charge
+    /// <summary>Current sprint charge.</summary>
     public float GetSprintCharge() => sprintCharge;
 
-    // Get method to retrieve the player's maximum sprint charge
+    /// <summary>Maximum sprint charge.</summary>
     public float GetMaxSprintCharge() => maxSprintCharge;
 
-    // Get method to retrieve the player's current forward velocity
+    /// <summary>Forward speed along the player's facing axis (horizontal only).</summary>
     public float GetForwardVelocity()
     {
         Vector3 horizontalVel = new Vector3(velocity.x, 0f, velocity.z);
         return Vector3.Dot(horizontalVel, transform.forward);
     }
 
-    // Get method to retrieve the player's current vertical velocity
+    /// <summary>Current vertical velocity.</summary>
     public float GetVerticalVelocity() => velocity.y;
 
-    // Set method to reset vertical velocity (used by climbing controller when finishing a climb)
+    /// <summary>Resets vertical velocity (used when finishing a climb).</summary>
     public void ResetVerticalVelocity() => velocity.y = 0f;
 
+    /// <summary>Updates backpack state for sprint multiplier selection.</summary>
     public void SetHasBackpack(bool hasBackpack) => _hasBackpack = hasBackpack;
 
+    /// <summary>Removes sprint charge and marks exhausted at zero.</summary>
     public void DrainStamina(float amount)
     {
         if (amount <= 0f)

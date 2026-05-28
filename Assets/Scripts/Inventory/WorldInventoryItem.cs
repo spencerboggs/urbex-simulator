@@ -2,9 +2,11 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>Physics-backed world pickup/drop instance for an inventory item type.</summary>
 [DisallowMultipleComponent]
 public sealed class WorldInventoryItem : MonoBehaviour
 {
+    /// <summary>Network id to instance map for replicated world items on this client.</summary>
     private static readonly Dictionary<int, WorldInventoryItem> ReplicatedItems = new();
 
     [SerializeField]
@@ -21,16 +23,28 @@ public sealed class WorldInventoryItem : MonoBehaviour
     [SerializeField]
     private Vector3 _visualOffset = new(0f, -0.015f, 0f);
 
+    /// <summary>Physics body for dropped and replicated items.</summary>
     private Rigidbody _rigidbody;
+
+    /// <summary>Pickup and collision volume for this world item.</summary>
     private BoxCollider _boxCollider;
+
+    /// <summary>Child transform holding procedural or prefab visuals.</summary>
     private Transform _visualRoot;
+
+    /// <summary>Replicated spawn id, or -1 for local-only instances.</summary>
     private int _networkItemId = -1;
 
+    /// <summary>Item type for this instance.</summary>
     public InventoryItemType ItemType => _itemType;
+
+    /// <summary>Replicated id when spawned over the network; -1 for local-only.</summary>
     public int NetworkItemId => _networkItemId;
 
+    /// <summary>Player-facing name from the catalog.</summary>
     public string DisplayName => InventoryItemCatalog.GetDisplayName(_itemType);
 
+    /// <summary>Spawns a dropped item with brief collision ignore against the dropper.</summary>
     public static WorldInventoryItem SpawnDropped(
         InventoryItemType itemType,
         Vector3 position,
@@ -43,6 +57,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         return worldItem;
     }
 
+    /// <summary>Spawns or updates a networked world item by id.</summary>
     public static WorldInventoryItem SpawnReplicated(
         int networkItemId,
         InventoryItemType itemType,
@@ -50,6 +65,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         Quaternion rotation,
         Vector3 velocity)
     {
+        // Update an existing replicated instance in place instead of spawning a duplicate.
         if (ReplicatedItems.TryGetValue(networkItemId, out WorldInventoryItem existing) && existing != null)
         {
             existing.transform.SetPositionAndRotation(position, rotation);
@@ -69,6 +85,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         return worldItem;
     }
 
+    /// <summary>Destroys the replicated instance for <paramref name="networkItemId"/>.</summary>
     public static void DestroyReplicated(int networkItemId)
     {
         if (!ReplicatedItems.TryGetValue(networkItemId, out WorldInventoryItem worldItem))
@@ -79,6 +96,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
             Destroy(worldItem.gameObject);
     }
 
+    /// <summary>Instantiates from the prefab catalog, or falls back to a procedural placeholder.</summary>
     private static WorldInventoryItem Spawn(
         InventoryItemType itemType,
         Vector3 position,
@@ -101,6 +119,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         return SpawnProceduralFallback(itemType, position, rotation, networkItemId);
     }
 
+    /// <summary>Creates a minimal runtime GameObject when no catalog prefab is available.</summary>
     private static WorldInventoryItem SpawnProceduralFallback(
         InventoryItemType itemType,
         Vector3 position,
@@ -115,11 +134,13 @@ public sealed class WorldInventoryItem : MonoBehaviour
         return worldItem;
     }
 
+    /// <summary>Reconfigures type and rebuilds procedural visuals if needed.</summary>
     public void Configure(InventoryItemType itemType)
     {
         FinalizeSpawn(itemType, _networkItemId, useProceduralVisualFallback: true);
     }
 
+    /// <summary>Applies item type, network id, physics, and optional procedural visuals after spawn.</summary>
     private void FinalizeSpawn(InventoryItemType itemType, int networkItemId, bool useProceduralVisualFallback)
     {
         _itemType = itemType;
@@ -132,16 +153,19 @@ public sealed class WorldInventoryItem : MonoBehaviour
         gameObject.name = $"{DisplayName}_world_item";
     }
 
+    /// <summary>Ensures physics components exist when the object is created in the scene.</summary>
     private void Awake()
     {
         EnsurePhysicsComponents();
     }
 
+    /// <summary>Unity editor callback to add physics components on reset.</summary>
     private void Reset()
     {
         EnsurePhysicsComponents();
     }
 
+    /// <summary>Removes this instance from the replicated lookup when destroyed.</summary>
     private void OnDestroy()
     {
         if (_networkItemId >= 0 &&
@@ -152,6 +176,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         }
     }
 
+    /// <summary>Adds or configures BoxCollider and Rigidbody with drop-friendly settings.</summary>
     private void EnsurePhysicsComponents()
     {
         if (_boxCollider == null && !TryGetComponent(out _boxCollider))
@@ -170,7 +195,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         _rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
     }
 
-    // Legacy placeholder mesh when no prefab exists in Prefabs/Items/
+    /// <summary>Attaches a procedural flashlight mesh when no art prefab visual exists.</summary>
     private void EnsureProceduralVisual()
     {
         if (_itemType != InventoryItemType.Flashlight)
@@ -185,6 +210,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         _visualRoot.localScale = Vector3.one;
     }
 
+    /// <summary>Temporarily disables collisions between this item and the player hierarchy.</summary>
     public void IgnorePlayerCollisionTemporarily(Transform playerRoot, float durationSeconds)
     {
         if (playerRoot == null || _boxCollider == null)
@@ -194,6 +220,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
         if (playerColliders == null || playerColliders.Length == 0)
             return;
 
+        // Ignore every player collider briefly so the drop does not immediately push the player.
         List<Collider> ignored = new List<Collider>(playerColliders.Length);
         for (int i = 0; i < playerColliders.Length; i++)
         {
@@ -209,6 +236,7 @@ public sealed class WorldInventoryItem : MonoBehaviour
             StartCoroutine(RestoreIgnoredCollisionsAfterDelay(ignored, durationSeconds));
     }
 
+    /// <summary>Re-enables collisions with the player after the temporary ignore window expires.</summary>
     private IEnumerator RestoreIgnoredCollisionsAfterDelay(List<Collider> ignoredColliders, float durationSeconds)
     {
         yield return new WaitForSeconds(durationSeconds);
