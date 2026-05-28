@@ -7,7 +7,7 @@ using UnityEngine;
 // kept in sync with Assets/Scenes/Gameplay/*.unity by Editor/MapCatalogAutoSync.cs.
 // You can edit `displayName` by hand on each entry; the auto-sync preserves
 // custom display names across re-imports. Scene names themselves are the source
-// of truth — drop a new .unity file in Scenes/Gameplay/ and it will appear here.
+// of truth - drop a new .unity file in Scenes/Gameplay/ and it will appear here.
 //
 // Loaded once at runtime via Resources.Load. If the asset doesn't exist yet,
 // Load() returns null and callers should treat that as "no maps available".
@@ -60,7 +60,7 @@ public sealed class MapCatalog : ScriptableObject
         return false;
     }
 
-    // Editor-only entry point for MapCatalogAutoSync. Don't call at runtime — the
+    // Editor-only entry point for MapCatalogAutoSync. Don't call at runtime - the
     // catalog should be treated as immutable once the game is running.
     public void SetMaps(MapEntry[] entries)
     {

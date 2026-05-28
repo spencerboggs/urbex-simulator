@@ -20,7 +20,7 @@ using UnityEngine;
 //     gameplay entries keep their enabled flag.
 //
 // Gameplay scenes have to be in EditorBuildSettings or FishNet/Unity can't load
-// them by name in a build — this auto-sync ensures designers never forget that
+// them by name in a build - this auto-sync ensures designers never forget that
 // step when adding a new map.
 public sealed class MapCatalogAutoSync : AssetPostprocessor
 {
@@ -107,7 +107,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
 
         List<EditorBuildSettingsScene> next = new List<EditorBuildSettingsScene>(current.Length + gameplayScenePaths.Count);
 
-        // Keep every non-gameplay scene exactly as it was — we never want to touch
+        // Keep every non-gameplay scene exactly as it was - we never want to touch
         // MainMenu, Lobby, Testing scenes, or anything the user has manually added.
         foreach (EditorBuildSettingsScene s in current)
         {
@@ -118,7 +118,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
         }
 
         // Re-add (or freshly add) every discovered gameplay scene. Preserve the
-        // existing entry — and therefore its enabled flag and GUID — when present.
+        // existing entry - and therefore its enabled flag and GUID - when present.
         HashSet<string> alreadyAdded = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
         foreach (string path in gameplayScenePaths)
         {
@@ -131,7 +131,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
                 next.Add(new EditorBuildSettingsScene(path, true));
         }
 
-        // Only write back if the list actually changed — avoids spurious asset
+        // Only write back if the list actually changed - avoids spurious asset
         // changes on every script reload.
         if (!ScenesEqual(current, next))
             EditorBuildSettings.scenes = next.ToArray();
@@ -191,7 +191,7 @@ public sealed class MapCatalogAutoSync : AssetPostprocessor
             };
         }
 
-        // Skip the write if nothing actually changed — keeps the inspector clean
+        // Skip the write if nothing actually changed - keeps the inspector clean
         // and avoids touching the asset on every script recompile.
         if (!isNew && MapsEqual(catalog.Maps, next))
             return;

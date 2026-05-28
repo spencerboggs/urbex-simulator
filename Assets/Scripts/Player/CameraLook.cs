@@ -18,20 +18,25 @@ public class CameraLook : MonoBehaviour
 
     // Current vertical rotation (pitch) of the camera
     float xRotation = 0f;
+    ClimbingController _climbing;
 
     void Start()
     {
+        TryGetComponent(out _climbing);
         ApplyEyeHeight();
     }
 
     void Update()
     {
+        if (Mouse.current == null || cameraHolder == null)
+            return;
+
         // Read mouse movement input
         Vector2 mouseDelta = Mouse.current.delta.ReadValue();
         float mouseX = mouseDelta.x * mouseSensitivity;
         float mouseY = mouseDelta.y * mouseSensitivity;
 
-        // Vertical look (pitch)
+        // Vertical look (pitch) - full range even while wall-clinging
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
 
@@ -39,6 +44,23 @@ public class CameraLook : MonoBehaviour
 
         // Horizontal look (yaw)
         transform.Rotate(Vector3.up * mouseX);
+
+        if (_climbing != null && _climbing.IsWallClinging)
+            ApplyWallClingYawClamp();
+    }
+
+    // While clinging, limit yaw to ±wallClingYawLimit around the direction facing the
+    // wall so look direction stays aligned with wall-relative movement (no full 360)
+    private void ApplyWallClingYawClamp()
+    {
+        float center = _climbing.WallClingYawCenter;
+        float limit = _climbing.WallClingYawLimit;
+        float delta = Mathf.DeltaAngle(center, transform.eulerAngles.y);
+        delta = Mathf.Clamp(delta, -limit, limit);
+
+        Vector3 euler = transform.eulerAngles;
+        euler.y = center + delta;
+        transform.eulerAngles = euler;
     }
 
     // Position cameraHolder near the top of the standing CharacterController capsule

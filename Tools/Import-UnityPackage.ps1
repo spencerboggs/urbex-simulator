@@ -56,7 +56,7 @@ try {
     }
 }
 finally {
-    # Leave the temp folder for debugging? No—clean up to avoid clutter.
+    # Leave the temp folder for debugging? No-clean up to avoid clutter.
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 

@@ -152,9 +152,9 @@ public class PlayerMovement : MonoBehaviour
             // Drain sprint charge when sprinting and moving
             sprintCharge -= sprintDrainRate * Time.deltaTime;
         }
-        else
+        else if (isGrounded)
         {
-            // Regenerate sprint charge when not sprinting
+            // Regenerate only on the ground so falling or climbing off a wall does not refill stamina mid-air
             sprintCharge += sprintRegenRate * Time.deltaTime;
         }
 
@@ -336,4 +336,15 @@ public class PlayerMovement : MonoBehaviour
     public void ResetVerticalVelocity() => velocity.y = 0f;
 
     public void SetHasBackpack(bool hasBackpack) => _hasBackpack = hasBackpack;
+
+    public void DrainStamina(float amount)
+    {
+        if (amount <= 0f)
+            return;
+
+        sprintCharge = Mathf.Max(0f, sprintCharge - amount);
+
+        if (sprintCharge <= 0f)
+            exhausted = true;
+    }
 }

@@ -205,7 +205,7 @@ public sealed class PlayerCameraMode : MonoBehaviour
         if (_viewfinder == null)
             return;
 
-        _viewfinder.SetControlHints("Click — take photo", "C");
+        _viewfinder.SetControlHints("Click - take photo", "C");
     }
 
     private void OnValidate()

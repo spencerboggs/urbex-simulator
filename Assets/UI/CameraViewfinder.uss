@@ -109,7 +109,7 @@
     background-color: rgba(255, 255, 255, 0.55);
 }
 
-/* Subtle CRT dim overlay (no gradient — Unity 6 USS gradients can crash the
+/* Subtle CRT dim overlay (no gradient - Unity 6 USS gradients can crash the
  * style applier in the asset preview path). */
 #crtScanlines {
     position: absolute;

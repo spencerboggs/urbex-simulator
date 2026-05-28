@@ -96,7 +96,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
                 if (!prefabRoot.TryGetComponent(out WorldInventoryItem worldItem))
                 {
                     Debug.LogWarning(
-                        $"[ItemPrefabCatalogAutoSync] Skipping '{assetPath}' — no WorldInventoryItem on root.");
+                        $"[ItemPrefabCatalogAutoSync] Skipping '{assetPath}' - no WorldInventoryItem on root.");
                     continue;
                 }
 
@@ -104,7 +104,7 @@ public sealed class ItemPrefabCatalogAutoSync : AssetPostprocessor
                 if (itemType == InventoryItemType.None)
                 {
                     Debug.LogWarning(
-                        $"[ItemPrefabCatalogAutoSync] Skipping '{assetPath}' — Item Type is None.");
+                        $"[ItemPrefabCatalogAutoSync] Skipping '{assetPath}' - Item Type is None.");
                     continue;
                 }
 

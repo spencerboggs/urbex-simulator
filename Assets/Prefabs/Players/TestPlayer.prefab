@@ -123,7 +123,7 @@ CharacterController:
   m_Height: 2
   m_Radius: 0.5
   m_SlopeLimit: 45
-  m_StepOffset: 0.3
+  m_StepOffset: 0.4
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
@@ -141,6 +141,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CameraLook
   cameraHolder: {fileID: 3528789793018449812}
   mouseSensitivity: 0.3
+  eyeOffsetFromTop: 0.15
 --- !u!114 &1701095863598958817
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -155,14 +156,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   moveSpeed: 2.5
   sprintMultiplier: 2.5
-  _hasBackpack: 0
-  _sprintMultiplierNoBackpack: 2.7
-  _sprintMultiplierWithBackpack: 2.3
+  _hasBackpack: 1
+  _sprintMultiplierNoBackpack: 3
+  _sprintMultiplierWithBackpack: 2.2
   jumpHeight: 1.8
   gravity: -20
   maxSprintCharge: 10
-  sprintDrainRate: 0.1
-  sprintRegenRate: 3
+  sprintDrainRate: 2
+  sprintRegenRate: 1
   minSprintRequired: 3
   noStaminaJumpMultiplier: 0.75
   jumpStaminaCostPercent: 0.01
@@ -201,10 +202,27 @@ MonoBehaviour:
   wallClingDistance: 0.45
   wallClimbVerticalSpeed: 2
   wallClimbHorizontalSpeed: 2.5
+  wallClimbStaminaDrainRate: 1.25
   wallClingReattachCooldown: 0.25
   wallClingJumpOffPush: 0.35
   maxWallTiltFromVertical: 30
   wallClingTopOutDuration: 0.8
+  wallClingTopOutUpBoost: 1
+  wallClingYawLimit: 85
+  wallClingMaxLateralHitOffset: 0.42
+  wallClingCornerProbeAhead: 0.35
+  wallClingInsideCornerInset: 0.22
+  wallClingInsideFaceProbeReach: 0.55
+  wallNormalBlendSpeed: 9
+  wallOffsetPullSpeed: 14
+  wallMaxOffsetPullPerFrame: 0.12
+  wallYawRecenterSpeed: 6
+  wallCornerArcSpeed: 1.6
+  wallInsideCornerArcSpeed: 1.4
+  wallClingAirDetachDelay: 0.14
+  wallClingMinContactStrength: 0.42
+  wallCornerProbeFanDegrees: 72
+  wallCornerProbeSteps: 7
 --- !u!114 &1626239779872317595
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -259,7 +277,6 @@ MonoBehaviour:
   _slotsWithBackpack: 5
   _startWithFlashlight: 1
   _selectedSlotIndex: -1
-  _pickupRange: 3
   _dropForwardDistance: 0.95
   _dropUpOffset: -0.08
   _dropForwardImpulse: 2.25
@@ -362,7 +379,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584217860342329117
+  _initializedTimestamp: -8584216790183174729
 --- !u!1 &4487654722471429204
 GameObject:
   m_ObjectHideFlags: 0

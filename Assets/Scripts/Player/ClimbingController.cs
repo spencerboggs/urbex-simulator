@@ -45,6 +45,10 @@ public class ClimbingController : MonoBehaviour
     [Tooltip("Horizontal movement speed while clinging (A / D).")]
     public float wallClimbHorizontalSpeed = 2.5f;
 
+    [Tooltip("Stamina drained per second while clinging and moving (W/A/S/D).")]
+    [Min(0f)]
+    public float wallClimbStaminaDrainRate = 1.25f;
+
     [Tooltip("Short delay after detaching before the player can re-grip the same wall.")]
     public float wallClingReattachCooldown = 0.25f;
 
@@ -54,8 +58,75 @@ public class ClimbingController : MonoBehaviour
     [Tooltip("Maximum tilt from vertical (degrees) a surface can have while still counting as a climbable wall.")]
     public float maxWallTiltFromVertical = 30f;
 
-    [Tooltip("Grace period (in seconds) the player stays attached after the wall ends above them. Lets them keep climbing past the top edge so their feet clear it and they can walk over. Physics still applies — ceilings and other geometry will block them normally.")]
+    [Tooltip("Grace period (in seconds) while climbing up past the top lip before detaching. Movement stays at full speed during this window.")]
     public float wallClingTopOutDuration = 0.8f;
+
+    [Tooltip("Extra upward speed applied while hauling over the top edge of a wall.")]
+    [Min(0f)]
+    public float wallClingTopOutUpBoost = 1.25f;
+
+    [Tooltip("How far the player can turn left or right (degrees) while wall-clinging. Pitch is unrestricted.")]
+    [Range(1f, 180f)]
+    public float wallClingYawLimit = 90f;
+
+    [Tooltip("Max sideways distance (m) a wall probe hit can be from the player's center column. Stops clinging when you've moved past the edge.")]
+    [Min(0.1f)]
+    public float wallClingMaxLateralHitOffset = 0.42f;
+
+    [Tooltip("How far ahead (along A/D) to probe when trying to wrap around an outside corner.")]
+    [Min(0.05f)]
+    public float wallClingCornerProbeAhead = 0.35f;
+
+    [Tooltip("Extra inset toward a concave (inside) corner when sampling the adjacent face.")]
+    [Min(0f)]
+    public float wallClingInsideCornerInset = 0.22f;
+
+    [Tooltip("How far ahead to search for the perpendicular wall at a concave corner.")]
+    [Min(0.1f)]
+    public float wallClingInsideFaceProbeReach = 0.55f;
+
+    [Header("Wall Cling Feel")]
+    [Tooltip("How quickly the attached normal blends when rounding a corner or transferring to an adjacent face.")]
+    [Min(1f)]
+    public float wallNormalBlendSpeed = 9f;
+
+    [Tooltip("How quickly the player is pulled back to the correct offset from the wall (prevents snapping).")]
+    [Min(1f)]
+    public float wallOffsetPullSpeed = 14f;
+
+    [Tooltip("Max distance pulled toward/away from the wall per frame.")]
+    [Min(0.01f)]
+    public float wallMaxOffsetPullPerFrame = 0.12f;
+
+    [Tooltip("How quickly the yaw reference recenters when the wall face changes.")]
+    [Min(1f)]
+    public float wallYawRecenterSpeed = 6f;
+
+    [Tooltip("Subtle movement along the corner edge while wrapping around outside corners.")]
+    [Min(0f)]
+    public float wallCornerArcSpeed = 1.6f;
+
+    [Tooltip("Subtle movement into concave corners while transferring to the adjacent inside face.")]
+    [Min(0f)]
+    public float wallInsideCornerArcSpeed = 1.4f;
+
+    [Tooltip("Seconds without a solid surface before detaching (unless climbing up over the top).")]
+    [Min(0.02f)]
+    public float wallClingAirDetachDelay = 0.14f;
+
+    [Tooltip("Minimum multi-probe contact strength (0-1) required to stay attached.")]
+    [Range(0.2f, 1f)]
+    public float wallClingMinContactStrength = 0.42f;
+
+    [Tooltip("Total angular spread (degrees) for corner-wrap probe fan.")]
+    [Range(20f, 120f)]
+    public float wallCornerProbeFanDegrees = 72f;
+
+    [Tooltip("Number of directions in the corner-wrap probe fan.")]
+    [Range(3, 12)]
+    public int wallCornerProbeSteps = 7;
+
+    static readonly float[] WallProbeHeights = { 0.45f, 1.0f, 1.45f };
 
     // Internal state
     private CharacterController controller;
@@ -77,6 +148,20 @@ public class ClimbingController : MonoBehaviour
     // without a surface in front, so the player can never get stuck in a phantom-cling
     // state in mid-air. Resets to 0 whenever the probe re-acquires a climbable surface
     private float topOutTimer = 0f;
+    private float offSurfaceTimer = 0f;
+    private Vector3 smoothedWallNormal = Vector3.forward;
+    private float wallClingYawCenter;
+
+    enum CornerWrapKind
+    {
+        None,
+        Outside,
+        Inside
+    }
+
+    public bool IsWallClinging => isWallClinging;
+    public float WallClingYawCenter => wallClingYawCenter;
+    public float WallClingYawLimit => wallClingYawLimit;
 
     void Start()
     {
@@ -395,7 +480,7 @@ public class ClimbingController : MonoBehaviour
     // the mantle should not be considered, even if cling itself didn't start this frame
     bool TryHandleClimbableWall()
     {
-        if (!DetectForwardWall(out RaycastHit hit))
+        if (!DetectForwardWall(out RaycastHit hit) && !DetectNearestClimbableWall(out hit))
             return false;
 
         if (hit.collider == null || !hit.collider.CompareTag(climbableTag))
@@ -404,9 +489,14 @@ public class ClimbingController : MonoBehaviour
         if (CanStartWallCling(hit))
         {
             StartWallCling(hit);
+            return true;
         }
-        // Tagged climbable surfaces are owned by this system. Suppress the mantle
-        // branch even if we didn't attach this frame
+
+        // Grounded players should not engage the wall-climb system - lets them run up to
+        // fences without sticking. Airborne players still claim climbables for cling/mantle routing
+        if (controller.isGrounded)
+            return false;
+
         return true;
     }
 
@@ -436,8 +526,55 @@ public class ClimbingController : MonoBehaviour
         return false;
     }
 
+    // At concave corners the player often does not face the wall directly; check all
+    // horizontal directions for the nearest climbable surface facing the player.
+    bool DetectNearestClimbableWall(out RaycastHit hit)
+    {
+        hit = default;
+        float bestDistance = float.MaxValue;
+        Vector3 chest = transform.position + Vector3.up * 1.0f;
+
+        Vector3[] directions =
+        {
+            transform.forward,
+            -transform.forward,
+            transform.right,
+            -transform.right
+        };
+
+        for (int i = 0; i < directions.Length; i++)
+        {
+            Vector3 dir = directions[i];
+            if (dir.sqrMagnitude < 0.0001f)
+                continue;
+
+            dir.Normalize();
+            if (!Physics.SphereCast(chest, wallClingCheckRadius, dir, out RaycastHit candidate, wallClingDetectDistance + 0.15f))
+                continue;
+
+            if (candidate.collider == null || !candidate.collider.CompareTag(climbableTag))
+                continue;
+
+            if (!IsValidClimbableWall(candidate.normal))
+                continue;
+
+            float facing = Vector3.Dot(chest - candidate.point, candidate.normal);
+            if (facing < 0.05f)
+                continue;
+
+            if (candidate.distance < bestDistance)
+            {
+                bestDistance = candidate.distance;
+                hit = candidate;
+            }
+        }
+
+        return bestDistance < float.MaxValue;
+    }
+
     bool CanStartWallCling(RaycastHit hit)
     {
+        if (controller.isGrounded) return false;
         if (clingCooldownTimer > 0f) return false;
         if (movement != null && movement.getIsCrouching()) return false;
 
@@ -455,8 +592,12 @@ public class ClimbingController : MonoBehaviour
     {
         isWallClinging = true;
         wallNormal = hit.normal;
+        smoothedWallNormal = hit.normal;
         currentClingCollider = hit.collider;
         topOutTimer = 0f;
+        offSurfaceTimer = 0f;
+
+        RecenterWallClingYaw(smooth: false);
 
         // Snap to a consistent horizontal offset from the wall surface; preserve current Y
         // so the player doesn't pop vertically when gripping
@@ -508,61 +649,772 @@ public class ClimbingController : MonoBehaviour
             wallRight = -wallRight;
 
         Vector2 input = ReadMoveInput();
+        ApplyWallClimbStaminaDrain(input);
+
         Vector3 motion = wallUp * (input.y * wallClimbVerticalSpeed)
                        + wallRight * (input.x * wallClimbHorizontalSpeed);
 
-        controller.Move(motion * Time.deltaTime);
+        Vector3 normalBeforeMove = smoothedWallNormal;
+        bool movingUp = input.y > 0.15f;
+        bool nearWallTop = IsNearWallTop(wallUp, wallRight);
 
-        // Re-probe forward to confirm we're still in front of a climbable surface and to
-        // track curved walls / adjacent climbable colliders. Also corrects drift along the
-        // wall normal so the player stays at a consistent offset
-        Vector3 probeOrigin = transform.position + Vector3.up * 1.0f;
-        Vector3 probeDir = -wallNormal;
-        float probeDistance = wallClingDistance + 0.5f;
+        bool hasSurface = SolveWallSurface(wallUp, wallRight, input, out RaycastHit surfaceHit, out float contactStrength, out CornerWrapKind cornerWrap);
 
-        if (Physics.SphereCast(probeOrigin, wallClingCheckRadius * 0.8f, probeDir, out RaycastHit reHit, probeDistance)
-            && reHit.collider != null
-            && reHit.collider.CompareTag(climbableTag))
+        bool toppingOut = movingUp && (nearWallTop || !hasSurface);
+
+        if (hasSurface)
         {
-            wallNormal = reHit.normal;
-            currentClingCollider = reHit.collider;
+            ApplySmoothWallAttachment(
+                surfaceHit,
+                contactStrength,
+                cornerWrap,
+                normalBeforeMove,
+                wallUp,
+                wallRight,
+                input,
+                limitWallPullForTopOut: toppingOut);
+        }
 
-            // Distance from player pivot to wall surface, measured along the (current) normal
-            float currentDistance = Vector3.Dot(transform.position - reHit.point, wallNormal);
-            float correction = wallClingDistance - currentDistance;
-            if (Mathf.Abs(correction) > 0.001f)
-                controller.Move(wallNormal * correction);
+        if (toppingOut)
+        {
+            topOutTimer += Time.deltaTime;
+            offSurfaceTimer = 0f;
 
-            // Back on the wall — refresh the grace timer.
+            if (topOutTimer >= wallClingTopOutDuration)
+                DetachFromWall(jumpOff: false);
+        }
+        else if (hasSurface)
+        {
             topOutTimer = 0f;
+            offSurfaceTimer = 0f;
         }
         else
         {
-            // No climbable surface in front. Keep the player attached for a short grace
-            // period so they can keep climbing past the top edge and step onto the ledge
-            // above. The timer ticks every frame regardless of input - that's what keeps
-            // them from ever getting stuck floating in mid-air with cling controls. The
-            // actual displacement is still controller.Move, so ceilings and other geometry
-            // block them just like normal movement; we never override physics
-            topOutTimer += Time.deltaTime;
-            if (topOutTimer >= wallClingTopOutDuration)
+            HandleWallSurfaceLost(input);
+        }
+
+        float grip = toppingOut
+            ? 1f
+            : hasSurface
+                ? 1f
+                : Mathf.Max(0f, 1f - offSurfaceTimer / wallClingAirDetachDelay);
+        controller.Move(motion * grip * Time.deltaTime);
+
+        if (toppingOut && wallClingTopOutUpBoost > 0f)
+            controller.Move(wallUp * wallClingTopOutUpBoost * Time.deltaTime);
+
+        // After moving, confirm we are still on a surface (stops sideways drift in open air)
+        if (!hasSurface
+            && SolveWallSurface(wallUp, wallRight, input, out surfaceHit, out contactStrength, out cornerWrap))
+        {
+            bool stillTopping = movingUp && (IsNearWallTop(wallUp, wallRight) || !hasSurface);
+            ApplySmoothWallAttachment(
+                surfaceHit,
+                contactStrength,
+                cornerWrap,
+                normalBeforeMove,
+                wallUp,
+                wallRight,
+                input,
+                limitWallPullForTopOut: stillTopping);
+
+            if (!stillTopping)
             {
-                DetachFromWall(jumpOff: false);
+                offSurfaceTimer = 0f;
+                topOutTimer = 0f;
             }
         }
+    }
+
+    // True when lower body probes still see the wall but upper probes do not - player is at the top lip
+    bool IsNearWallTop(Vector3 wallUp, Vector3 wallRight)
+    {
+        bool upperContact = HasForwardWallContact(WallProbeHeights[WallProbeHeights.Length - 1], wallUp, wallRight);
+        if (upperContact)
+            return false;
+
+        for (int i = 0; i < WallProbeHeights.Length - 1; i++)
+        {
+            if (HasForwardWallContact(WallProbeHeights[i], wallUp, wallRight))
+                return true;
+        }
+
+        return false;
+    }
+
+    bool HasForwardWallContact(float probeHeight, Vector3 wallUp, Vector3 wallRight)
+    {
+        Vector3 origin = transform.position + Vector3.up * probeHeight;
+        if (!TryClimbableProbe(origin, -smoothedWallNormal, out RaycastHit hit))
+            return false;
+
+        if (!IsValidClimbableWall(hit.normal))
+            return false;
+
+        Vector3 chest = transform.position + Vector3.up * 1.0f;
+        if (Vector3.Dot(chest - hit.point, hit.normal) < 0.05f)
+            return false;
+
+        return ScoreWallHit(hit, wallUp, wallRight, out _, lateralLimitScale: 1.35f);
+    }
+
+    // Multi-probe surface solver: chest/waist/head samples, corner fan, and lateral
+    // ahead casts. Picks the best valid hit and returns an aggregate contact strength
+    bool SolveWallSurface(
+        Vector3 wallUp,
+        Vector3 wallRight,
+        Vector2 input,
+        out RaycastHit bestHit,
+        out float contactStrength,
+        out CornerWrapKind cornerWrap)
+    {
+        bestHit = default;
+        contactStrength = 0f;
+        cornerWrap = CornerWrapKind.None;
+
+        float bestScore = -1f;
+        int forwardValidProbes = 0;
+
+        Vector3 primaryDir = -smoothedWallNormal;
+
+        for (int i = 0; i < WallProbeHeights.Length; i++)
+        {
+            float height = WallProbeHeights[i];
+            Vector3 origin = transform.position + Vector3.up * height;
+
+            if (TryClimbableProbe(origin, primaryDir, out RaycastHit hit)
+                && ScoreWallHit(hit, wallUp, wallRight, out float score))
+            {
+                forwardValidProbes++;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestHit = hit;
+                }
+            }
+        }
+
+        float sideInput = input.x;
+        float forwardBestScore = bestScore;
+
+        if (TryGetCornerMoveDirection(wallRight, input, out Vector3 moveAlongWall))
+        {
+            ProbeOutsideCornerWrap(wallUp, wallRight, moveAlongWall, ref bestScore, ref bestHit);
+
+            float insideScore = -1f;
+            RaycastHit insideHit = default;
+            ProbeInsideCornerWrap(wallUp, wallRight, moveAlongWall, ref insideScore, ref insideHit);
+
+            if (insideScore > 0f
+                && ShouldPreferInsideCornerFace(
+                    insideHit,
+                    moveAlongWall,
+                    smoothedWallNormal,
+                    insideScore,
+                    forwardBestScore))
+            {
+                bestScore = insideScore;
+                bestHit = insideHit;
+                cornerWrap = CornerWrapKind.Inside;
+            }
+        }
+
+        if (bestScore < 0f)
+            return false;
+
+        contactStrength = bestScore;
+        if (forwardValidProbes >= 2)
+            contactStrength = Mathf.Max(contactStrength, 0.68f);
+        else if (forwardValidProbes >= 1)
+            contactStrength = Mathf.Max(contactStrength, 0.48f);
+
+        if (cornerWrap == CornerWrapKind.None)
+        {
+            bool faceChanged = Vector3.Angle(smoothedWallNormal, bestHit.normal) > 5f
+                               || bestHit.collider != currentClingCollider;
+            if (faceChanged && Mathf.Abs(sideInput) > 0.08f)
+            {
+                Vector3 classifyMoveDir = wallRight * Mathf.Sign(sideInput);
+                cornerWrap = ClassifyCornerWrap(smoothedWallNormal, bestHit.normal, classifyMoveDir);
+            }
+        }
+
+        return contactStrength >= wallClingMinContactStrength;
+    }
+
+    static bool ShouldPreferInsideCornerFace(
+        RaycastHit insideHit,
+        Vector3 moveAlongWall,
+        Vector3 currentNormal,
+        float insideScore,
+        float forwardScore)
+    {
+        if (forwardScore < 0f)
+            return true;
+
+        float angle = Vector3.Angle(currentNormal, insideHit.normal);
+
+        if (Vector3.Dot(insideHit.normal, moveAlongWall) >= 0.05f)
+            return false;
+
+        if (angle < 35f)
+            return false;
+
+        if (angle >= 50f)
+            return true;
+
+        return insideScore >= forwardScore * 0.72f;
+    }
+
+    void ProbeOutsideCornerWrap(Vector3 wallUp, Vector3 wallRight, Vector3 moveAlongWall, ref float bestScore, ref RaycastHit bestHit)
+    {
+        Vector3 primaryDir = -smoothedWallNormal;
+        Vector3 bentTarget = (-smoothedWallNormal + moveAlongWall * 0.95f).normalized;
+        int steps = Mathf.Max(wallCornerProbeSteps, 3);
+
+        for (int step = 0; step <= steps; step++)
+        {
+            float t = step / (float)steps;
+            Vector3 fanDir = Vector3.Slerp(primaryDir, bentTarget, t).normalized;
+            float ahead = wallClingCornerProbeAhead * t;
+
+            for (int h = 0; h < WallProbeHeights.Length; h++)
+            {
+                float height = WallProbeHeights[h];
+                Vector3 origin = transform.position
+                                 + Vector3.up * height
+                                 + moveAlongWall * ahead;
+
+                if (!TryClimbableProbe(origin, fanDir, out RaycastHit fanHit))
+                    continue;
+
+                if (!ScoreWallHit(fanHit, wallUp, wallRight, out float fanScore))
+                    continue;
+
+                if (step > 0 && !IsWrapPathClear(fanHit, insideCorner: false))
+                    continue;
+
+                if (fanScore > bestScore)
+                {
+                    bestScore = fanScore;
+                    bestHit = fanHit;
+                }
+            }
+        }
+
+        Vector3 aheadOrigin = transform.position
+                              + moveAlongWall * wallClingCornerProbeAhead
+                              + Vector3.up * 1.0f;
+        Vector3 towardWall = (-smoothedWallNormal - moveAlongWall * 0.4f).normalized;
+
+        TryCornerAheadProbes(aheadOrigin, towardWall, wallUp, wallRight, insideCorner: false, ref bestScore, ref bestHit);
+    }
+
+    void ProbeInsideCornerWrap(
+        Vector3 wallUp,
+        Vector3 wallRight,
+        Vector3 moveAlongWall,
+        ref float bestScore,
+        ref RaycastHit bestHit)
+    {
+        // Primary inside-corner cast: straight toward the perpendicular wall the player is walking into
+        float[] aheadSamples = { 0.08f, 0.2f, 0.35f, 0.5f };
+        for (int a = 0; a < aheadSamples.Length; a++)
+        {
+            float ahead = aheadSamples[a] * wallClingInsideFaceProbeReach;
+            for (int h = 0; h < WallProbeHeights.Length; h++)
+            {
+                float height = WallProbeHeights[h];
+                Vector3 origin = transform.position + Vector3.up * height + moveAlongWall * ahead;
+                Vector3 towardFace = moveAlongWall.normalized;
+
+                if (!TryBestInsideProbeHit(origin, towardFace, moveAlongWall, out RaycastHit perpHit, out float perpScore))
+                    continue;
+
+                if (perpScore > bestScore)
+                {
+                    bestScore = perpScore;
+                    bestHit = perpHit;
+                }
+            }
+        }
+
+        Vector3 primaryDir = -smoothedWallNormal;
+        Vector3 bentTarget = (-smoothedWallNormal - moveAlongWall * 0.95f).normalized;
+        int steps = Mathf.Max(wallCornerProbeSteps, 3);
+
+        for (int step = 0; step <= steps; step++)
+        {
+            float t = step / (float)steps;
+            Vector3 fanDir = Vector3.Slerp(primaryDir, bentTarget, t).normalized;
+            float ahead = wallClingCornerProbeAhead * t;
+
+            for (int h = 0; h < WallProbeHeights.Length; h++)
+            {
+                float height = WallProbeHeights[h];
+                Vector3 origin = transform.position
+                                 + Vector3.up * height
+                                 + moveAlongWall * ahead;
+
+                if (!TryClimbableProbe(origin, fanDir, out RaycastHit fanHit))
+                    continue;
+
+                if (!IsInsideAdjacentFace(fanHit, moveAlongWall, out float fanScore))
+                    continue;
+
+                if (step > 1 && !IsWrapPathClear(fanHit, insideCorner: true))
+                    continue;
+
+                if (fanScore > bestScore)
+                {
+                    bestScore = fanScore;
+                    bestHit = fanHit;
+                }
+            }
+        }
+
+        Vector3 aheadOrigin = transform.position
+                              + moveAlongWall * wallClingCornerProbeAhead
+                              + Vector3.up * 1.0f;
+        Vector3 towardWall = (-smoothedWallNormal + moveAlongWall * 0.55f).normalized;
+
+        for (int h = 0; h < WallProbeHeights.Length; h++)
+        {
+            float height = WallProbeHeights[h];
+            Vector3 origin = aheadOrigin + Vector3.up * (height - 1.0f);
+
+            if (!TryClimbableProbe(origin, towardWall, out RaycastHit aheadHit))
+                continue;
+
+            if (!IsInsideAdjacentFace(aheadHit, moveAlongWall, out float aheadScore))
+                continue;
+
+            if (aheadScore > bestScore)
+            {
+                bestScore = aheadScore;
+                bestHit = aheadHit;
+            }
+        }
+
+        Vector3 intoCorner = (-smoothedWallNormal - moveAlongWall).normalized;
+        for (int h = 0; h < WallProbeHeights.Length; h++)
+        {
+            float height = WallProbeHeights[h];
+            Vector3 bisectorOrigin = transform.position
+                                     + Vector3.up * height
+                                     + moveAlongWall * wallClingCornerProbeAhead * 0.65f;
+
+            if (!TryClimbableProbe(bisectorOrigin, intoCorner, out RaycastHit bisectorHit))
+                continue;
+
+            if (!IsInsideAdjacentFace(bisectorHit, moveAlongWall, out float bisectorScore))
+                continue;
+
+            if (bisectorScore > bestScore)
+            {
+                bestScore = bisectorScore;
+                bestHit = bisectorHit;
+            }
+        }
+    }
+
+    bool IsInsideAdjacentFace(RaycastHit hit, Vector3 moveAlongWall, out float score)
+    {
+        score = 0f;
+        if (!IsValidClimbableWall(hit.normal))
+            return false;
+
+        float angleFromCurrent = Vector3.Angle(smoothedWallNormal, hit.normal);
+        if (angleFromCurrent < 30f)
+            return false;
+
+        if (Vector3.Dot(hit.normal, moveAlongWall) >= 0.05f)
+            return false;
+
+        return ScoreInsideCornerFaceHit(hit, angleFromCurrent, out score);
+    }
+
+    bool ScoreInsideCornerFaceHit(RaycastHit hit, float angleFromCurrent, out float score)
+    {
+        score = 0f;
+        Vector3 chest = transform.position + Vector3.up * 1.0f;
+        float facing = Vector3.Dot(chest - hit.point, hit.normal);
+        if (facing < 0.02f)
+            return false;
+
+        float distAlongNormal = Vector3.Dot(transform.position - hit.point, hit.normal);
+        float distError = Mathf.Abs(distAlongNormal - wallClingDistance);
+        if (distError > 0.95f)
+            return false;
+
+        float angleScore = Mathf.Clamp01((angleFromCurrent - 30f) / 60f);
+        float distScore = 1f - distError / 0.95f;
+        float facingScore = Mathf.Clamp01(facing / 0.25f);
+        score = angleScore * 0.45f + distScore * 0.35f + facingScore * 0.2f;
+        return score > 0.1f;
+    }
+
+    void TryCornerAheadProbes(
+        Vector3 aheadOrigin,
+        Vector3 towardWall,
+        Vector3 wallUp,
+        Vector3 wallRight,
+        bool insideCorner,
+        ref float bestScore,
+        ref RaycastHit bestHit)
+    {
+        float lateralScale = insideCorner ? 1.45f : 1f;
+
+        for (int h = 0; h < WallProbeHeights.Length; h++)
+        {
+            float height = WallProbeHeights[h];
+            Vector3 origin = aheadOrigin + Vector3.up * (height - 1.0f);
+
+            if (!TryClimbableProbe(origin, towardWall, out RaycastHit aheadHit))
+                continue;
+
+            if (!ScoreWallHit(aheadHit, wallUp, wallRight, out float aheadScore, lateralScale))
+                continue;
+
+            if (!IsWrapPathClear(aheadHit, insideCorner))
+                continue;
+
+            if (aheadScore > bestScore)
+            {
+                bestScore = aheadScore;
+                bestHit = aheadHit;
+            }
+        }
+    }
+
+    bool TryGetCornerMoveDirection(Vector3 wallRight, Vector2 input, out Vector3 moveAlongWall)
+    {
+        if (Mathf.Abs(input.x) > 0.08f)
+        {
+            moveAlongWall = wallRight * Mathf.Sign(input.x);
+            return true;
+        }
+
+        if (input.y > 0.1f && TryFindInsideCornerApproach(wallRight, out moveAlongWall))
+            return true;
+
+        moveAlongWall = default;
+        return false;
+    }
+
+    bool TryFindInsideCornerApproach(Vector3 wallRight, out Vector3 moveAlongWall)
+    {
+        moveAlongWall = default;
+        float nearest = float.MaxValue;
+        Vector3 chest = transform.position + Vector3.up * 1.0f;
+
+        for (int sign = -1; sign <= 1; sign += 2)
+        {
+            Vector3 dir = wallRight * sign;
+            Vector3 origin = chest + dir * 0.12f;
+            if (!Physics.SphereCast(
+                    origin,
+                    wallClingCheckRadius * 0.7f,
+                    dir,
+                    out RaycastHit hit,
+                    wallClingInsideFaceProbeReach + 0.35f,
+                    ~0,
+                    QueryTriggerInteraction.Ignore))
+            {
+                continue;
+            }
+
+            if (hit.collider == null || !hit.collider.CompareTag(climbableTag))
+                continue;
+
+            if (!IsValidClimbableWall(hit.normal))
+                continue;
+
+            float angle = Vector3.Angle(smoothedWallNormal, hit.normal);
+            if (angle < 45f)
+                continue;
+
+            if (Vector3.Dot(hit.normal, dir) >= 0.05f)
+                continue;
+
+            if (hit.distance < nearest)
+            {
+                nearest = hit.distance;
+                moveAlongWall = dir;
+            }
+        }
+
+        return nearest < float.MaxValue;
+    }
+
+    static CornerWrapKind ClassifyCornerWrap(Vector3 previousNormal, Vector3 newNormal, Vector3 moveAlongWall)
+    {
+        if (Vector3.Dot(newNormal, moveAlongWall) < -0.12f)
+            return CornerWrapKind.Inside;
+
+        return CornerWrapKind.Outside;
+    }
+
+    bool TryClimbableProbe(Vector3 origin, Vector3 direction, out RaycastHit hit)
+    {
+        float probeDistance = wallClingDistance + 0.45f;
+        if (Physics.SphereCast(
+                origin,
+                wallClingCheckRadius * 0.75f,
+                direction.normalized,
+                out hit,
+                probeDistance,
+                ~0,
+                QueryTriggerInteraction.Ignore)
+            && hit.collider != null
+            && hit.collider.CompareTag(climbableTag))
+        {
+            return true;
+        }
+
+        hit = default;
+        return false;
+    }
+
+    bool TryBestInsideProbeHit(
+        Vector3 origin,
+        Vector3 direction,
+        Vector3 moveAlongWall,
+        out RaycastHit bestHit,
+        out float bestScore)
+    {
+        bestHit = default;
+        bestScore = -1f;
+        float probeDistance = wallClingDistance + wallClingInsideFaceProbeReach + 0.25f;
+        RaycastHit[] hits = Physics.SphereCastAll(
+            origin,
+            wallClingCheckRadius * 0.75f,
+            direction.normalized,
+            probeDistance,
+            ~0,
+            QueryTriggerInteraction.Ignore);
+
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit candidate = hits[i];
+            if (candidate.collider == null || !candidate.collider.CompareTag(climbableTag))
+                continue;
+
+            if (!IsInsideAdjacentFace(candidate, moveAlongWall, out float score))
+                continue;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestHit = candidate;
+            }
+        }
+
+        return bestScore > 0f;
+    }
+
+    bool IsValidClimbableWall(Vector3 normal)
+    {
+        float tiltFromVertical = Mathf.Abs(Vector3.Angle(normal, Vector3.up) - 90f);
+        return tiltFromVertical <= maxWallTiltFromVertical;
+    }
+
+    bool ScoreWallHit(RaycastHit hit, Vector3 wallUp, Vector3 wallRight, out float score, float lateralLimitScale = 1f)
+    {
+        score = 0f;
+        if (!IsValidClimbableWall(hit.normal))
+            return false;
+
+        Vector3 chest = transform.position + Vector3.up * 1.0f;
+
+        // Surface must face the player (reject grazing hits past an open edge)
+        float facing = Vector3.Dot(chest - hit.point, hit.normal);
+        if (facing < 0.1f)
+            return false;
+
+        Vector3 toHit = hit.point - chest;
+        Vector3 alongWall = Vector3.ProjectOnPlane(toHit, wallUp);
+        float lateral = Mathf.Abs(Vector3.Dot(alongWall, wallRight));
+        float lateralLimit = wallClingMaxLateralHitOffset * lateralLimitScale;
+        if (lateral > lateralLimit)
+            return false;
+
+        float distAlongNormal = Vector3.Dot(transform.position - hit.point, hit.normal);
+        float distError = Mathf.Abs(distAlongNormal - wallClingDistance);
+        if (distError > 0.38f)
+            return false;
+
+        float lateralScore = 1f - lateral / lateralLimit;
+        float distScore = 1f - distError / 0.38f;
+        float facingScore = Mathf.Clamp01(facing / 0.35f);
+        score = lateralScore * 0.35f + distScore * 0.4f + facingScore * 0.25f;
+        return score > 0.12f;
+    }
+
+    bool IsWrapPathClear(RaycastHit targetHit, bool insideCorner)
+    {
+        Vector3 start = transform.position + Vector3.up * 1.0f;
+        Vector3 end = targetHit.point + targetHit.normal * wallClingDistance;
+        Vector3 delta = end - start;
+        float dist = delta.magnitude;
+        if (dist < 0.05f)
+            return true;
+
+        float radius = wallClingCheckRadius * 0.6f;
+        if (!Physics.SphereCast(start, radius, delta.normalized, out RaycastHit block, dist, ~0, QueryTriggerInteraction.Ignore))
+            return true;
+
+        if (block.collider == targetHit.collider)
+            return true;
+
+        if (insideCorner)
+        {
+            // Concave wrap passes through the other climbable face at the corner
+            if (block.collider != null && block.collider.CompareTag(climbableTag))
+                return true;
+
+            return false;
+        }
+
+        if (block.collider != null && block.collider.CompareTag(climbableTag))
+            return true;
+
+        return false;
+    }
+
+    void ApplySmoothWallAttachment(
+        RaycastHit hit,
+        float contactStrength,
+        CornerWrapKind cornerWrap,
+        Vector3 normalBeforeMove,
+        Vector3 wallUp,
+        Vector3 wallRight,
+        Vector2 input,
+        bool limitWallPullForTopOut = false)
+    {
+        currentClingCollider = hit.collider;
+
+        bool roundingCorner = cornerWrap != CornerWrapKind.None;
+
+        bool insideTransition = cornerWrap == CornerWrapKind.Inside;
+
+        float blendT = 1f - Mathf.Exp(-wallNormalBlendSpeed * Time.deltaTime);
+        if (roundingCorner)
+            blendT = Mathf.Min(blendT * (insideTransition ? 1.6f : 1.35f), insideTransition ? 0.28f : 0.22f);
+
+        smoothedWallNormal = Vector3.Slerp(smoothedWallNormal, hit.normal, blendT).normalized;
+        wallNormal = smoothedWallNormal;
+
+        if (roundingCorner && Mathf.Abs(input.x) > 0.08f)
+        {
+            float arcWeight = Mathf.Clamp01(Vector3.Angle(normalBeforeMove, hit.normal) / 90f);
+            float sideSign = Mathf.Sign(input.x);
+            Vector3 moveAlongWall = wallRight * sideSign;
+
+            if (insideTransition && wallInsideCornerArcSpeed > 0f)
+            {
+                Vector3 intoCorner = Vector3.ProjectOnPlane(-normalBeforeMove - hit.normal, wallUp);
+                if (intoCorner.sqrMagnitude > 0.0001f)
+                {
+                    intoCorner.Normalize();
+                    controller.Move(intoCorner * wallInsideCornerArcSpeed * arcWeight * Time.deltaTime);
+                }
+
+                controller.Move(moveAlongWall * wallInsideCornerArcSpeed * 0.55f * arcWeight * Time.deltaTime);
+            }
+            else if (cornerWrap == CornerWrapKind.Outside && wallCornerArcSpeed > 0f)
+            {
+                Vector3 cornerTangent = Vector3.Cross(wallUp, smoothedWallNormal).normalized * sideSign;
+                controller.Move(cornerTangent * wallCornerArcSpeed * arcWeight * Time.deltaTime);
+            }
+        }
+
+        Vector3 pullNormal = insideTransition ? hit.normal : smoothedWallNormal;
+        float maxPull = insideTransition ? wallMaxOffsetPullPerFrame * 2.2f : wallMaxOffsetPullPerFrame;
+        float pullSpeed = insideTransition ? wallOffsetPullSpeed * 1.35f : wallOffsetPullSpeed;
+
+        float distAlongNormal = Vector3.Dot(transform.position - hit.point, pullNormal);
+        float offsetError = wallClingDistance - distAlongNormal;
+        if (limitWallPullForTopOut && input.y > 0.08f)
+        {
+            maxPull = 0f;
+        }
+        else if (limitWallPullForTopOut)
+        {
+            maxPull *= 0.2f;
+        }
+
+        float pull = Mathf.Clamp(
+            offsetError * pullSpeed * Time.deltaTime * Mathf.Lerp(0.5f, 1f, contactStrength),
+            -maxPull,
+            maxPull);
+        if (Mathf.Abs(pull) > 0.0001f)
+            controller.Move(pullNormal * pull);
+
+        RecenterWallClingYaw(smooth: true);
+    }
+
+    void RecenterWallClingYaw(bool smooth)
+    {
+        Vector3 faceWall = Vector3.ProjectOnPlane(-smoothedWallNormal, Vector3.up);
+        if (faceWall.sqrMagnitude < 0.0001f)
+            return;
+
+        faceWall.Normalize();
+        float targetYaw = Mathf.Atan2(faceWall.x, faceWall.z) * Mathf.Rad2Deg;
+
+        if (smooth)
+        {
+            float t = 1f - Mathf.Exp(-wallYawRecenterSpeed * Time.deltaTime);
+            wallClingYawCenter = Mathf.LerpAngle(wallClingYawCenter, targetYaw, t);
+        }
+        else
+        {
+            wallClingYawCenter = targetYaw;
+            transform.rotation = Quaternion.LookRotation(faceWall);
+        }
+    }
+
+    void HandleWallSurfaceLost(Vector2 input)
+    {
+        offSurfaceTimer += Time.deltaTime;
+
+        if (offSurfaceTimer >= wallClingAirDetachDelay)
+            DetachFromWall(jumpOff: false);
+    }
+
+    void ApplyWallClimbStaminaDrain(Vector2 input)
+    {
+        if (movement == null || wallClimbStaminaDrainRate <= 0f)
+            return;
+
+        if (input.sqrMagnitude < 0.0064f)
+            return;
+
+        movement.DrainStamina(wallClimbStaminaDrainRate * Time.deltaTime);
+
+        if (movement.GetSprintCharge() <= 0f)
+            DetachFromWall(jumpOff: false);
     }
 
     void DetachFromWall(bool jumpOff)
     {
         isWallClinging = false;
         currentClingCollider = null;
+        offSurfaceTimer = 0f;
+        topOutTimer = 0f;
         clingCooldownTimer = wallClingReattachCooldown;
 
         if (jumpOff)
         {
             // Brief outward shove so the player visibly pushes off and the cooldown
             // keeps them from immediately re-gripping the same surface
-            controller.Move(wallNormal * wallClingJumpOffPush);
+            controller.Move(smoothedWallNormal * wallClingJumpOffPush);
         }
 
         if (movement != null)
