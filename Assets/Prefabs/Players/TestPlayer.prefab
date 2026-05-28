@@ -154,11 +154,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4234729dd9eb93d479853210b98fe8cf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
-  moveSpeed: 2.5
+  moveSpeed: 4
   sprintMultiplier: 2.5
   _hasBackpack: 1
-  _sprintMultiplierNoBackpack: 3
-  _sprintMultiplierWithBackpack: 2.2
+  _sprintMultiplierNoBackpack: 2
+  _sprintMultiplierWithBackpack: 1.5
   jumpHeight: 1.8
   gravity: -20
   maxSprintCharge: 10
