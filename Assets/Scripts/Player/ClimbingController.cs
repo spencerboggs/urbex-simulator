@@ -27,6 +27,10 @@ public class ClimbingController : MonoBehaviour
     [Tooltip("How far in front of the player to look for a climbable surface to attach to.")]
     public float wallClingDetectDistance = 0.65f;
 
+    [Tooltip("Minimum horizontal alignment (0-1) between view direction and the wall face required to start clinging. Higher values require looking more directly at the wall.")]
+    [Range(0f, 1f)]
+    public float wallClingStartFacingThreshold = 0.35f;
+
     [Tooltip("Sphere radius used when probing for a climbable surface.")]
     public float wallClingCheckRadius = 0.2f;
 
@@ -540,6 +544,9 @@ public class ClimbingController : MonoBehaviour
             if (facing < 0.05f)
                 continue;
 
+            if (!IsClimbableWallInFront(candidate))
+                continue;
+
             if (candidate.distance < bestDistance)
             {
                 bestDistance = candidate.distance;
@@ -551,7 +558,7 @@ public class ClimbingController : MonoBehaviour
     }
 
     /// <summary>
-    /// True when airborne, off cooldown, upright enough, and pressing or moving forward into the wall.
+    /// True when airborne, off cooldown, upright enough, facing the wall, and pressing or moving forward into it.
     /// </summary>
     bool CanStartWallCling(RaycastHit hit)
     {
@@ -562,9 +569,28 @@ public class ClimbingController : MonoBehaviour
         float tiltFromVertical = Mathf.Abs(Vector3.Angle(hit.normal, Vector3.up) - 90f);
         if (tiltFromVertical > maxWallTiltFromVertical) return false;
 
+        if (!IsClimbableWallInFront(hit))
+            return false;
+
         bool forwardPressed = Keyboard.current != null && Keyboard.current.wKey.isPressed;
         bool forwardVelocity = movement != null && movement.GetForwardVelocity() > 0.1f;
         return forwardPressed || forwardVelocity;
+    }
+
+    /// <summary>
+    /// True when the climbable face lies in front of the player's horizontal view within <see cref="wallClingStartFacingThreshold"/>.
+    /// </summary>
+    bool IsClimbableWallInFront(RaycastHit hit)
+    {
+        Vector3 viewForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        Vector3 towardWall = Vector3.ProjectOnPlane(-hit.normal, Vector3.up);
+
+        if (viewForward.sqrMagnitude < 0.0001f || towardWall.sqrMagnitude < 0.0001f)
+            return false;
+
+        viewForward.Normalize();
+        towardWall.Normalize();
+        return Vector3.Dot(viewForward, towardWall) >= wallClingStartFacingThreshold;
     }
 
     /// <summary>
