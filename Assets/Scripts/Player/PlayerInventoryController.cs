@@ -33,6 +33,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     [SerializeField]
     private bool _startWithFlashlight = true;
 
+    [SerializeField]
+    private bool _startWithSprayPaint = true;
+
     [Header("Selection")]
     [SerializeField]
     [Range(-1, 4)]
@@ -60,6 +63,8 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     private PlayerCameraMode _cameraMode;
     /// <summary>Held flashlight visual and light toggled when flashlight slot is selected.</summary>
     private PlayerFlashlightMode _flashlightMode;
+    /// <summary>Held spray paint can and painting when spray paint slot is selected.</summary>
+    private PlayerSprayPaintMode _sprayPaintMode;
     /// <summary>Movement used to sync backpack sprint multiplier.</summary>
     private PlayerMovement _movement;
     /// <summary>Gameplay camera used as drop spawn origin.</summary>
@@ -100,6 +105,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
 
         if (!TryGetComponent(out _flashlightMode))
             _flashlightMode = gameObject.AddComponent<PlayerFlashlightMode>();
+
+        if (!TryGetComponent(out _sprayPaintMode))
+            _sprayPaintMode = gameObject.AddComponent<PlayerSprayPaintMode>();
 
         if (!TryGetComponent<PlayerInteractor>(out _))
             gameObject.AddComponent<PlayerInteractor>();
@@ -196,6 +204,13 @@ public sealed class PlayerInventoryController : NetworkBehaviour
                 _slotItems[defaultSlot] = InventoryItemType.Flashlight;
         }
 
+        if (_startWithSprayPaint && !ContainsItem(InventoryItemType.SprayPaint))
+        {
+            int defaultSlot = GetFirstAvailableInventorySlot();
+            if (defaultSlot > 0)
+                _slotItems[defaultSlot] = InventoryItemType.SprayPaint;
+        }
+
         _inventoryInitialized = true;
     }
 
@@ -254,6 +269,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
 
         if (_flashlightMode != null)
             _flashlightMode.SetEquipped(selectedItem == InventoryItemType.Flashlight);
+
+        if (_sprayPaintMode != null)
+            _sprayPaintMode.SetEquipped(selectedItem == InventoryItemType.SprayPaint);
 
         if (publishHud && ShouldPublishHud())
             PublishHotbarState();
@@ -314,8 +332,14 @@ public sealed class PlayerInventoryController : NetworkBehaviour
                 $"Drop {InventoryItemCatalog.GetDisplayName(selectedItem)}");
         }
 
-        bool visible = !string.IsNullOrEmpty(primaryLine) || !string.IsNullOrEmpty(dropLine);
-        _hudController.SetItemKeyHints(visible, primaryLine, dropLine);
+        string extraLine = null;
+        if (InventoryItemCatalog.TryGetExtraKeyHint(selectedItem, out string extraHint))
+            extraLine = extraHint;
+
+        bool visible = !string.IsNullOrEmpty(primaryLine)
+                       || !string.IsNullOrEmpty(dropLine)
+                       || !string.IsNullOrEmpty(extraLine);
+        _hudController.SetItemKeyHints(visible, primaryLine, dropLine, extraLine);
     }
 
     /// <summary>Returns the item in the selected slot, or None when deselected.</summary>

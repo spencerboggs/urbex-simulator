@@ -18,6 +18,8 @@ public class PlayerHUDController : MonoBehaviour
     private PlayerMovement movement;
     /// <summary>Cached health for health bar updates.</summary>
     private PlayerHealth health;
+    /// <summary>Cached spray paint mode for crosshair feedback.</summary>
+    private PlayerSprayPaintMode _sprayPaintMode;
     /// <summary>UI Toolkit document on the spawned or assigned HUD.</summary>
     private UIDocument _hudDocument;
     /// <summary>When false, bars are hidden (e.g. camera viewfinder open).</summary>
@@ -28,6 +30,7 @@ public class PlayerHUDController : MonoBehaviour
     {
         movement = GetComponent<PlayerMovement>();
         health = GetComponent<PlayerHealth>();
+        TryGetComponent(out _sprayPaintMode);
 
         // Ignore prefab asset references; spawn runtime HUD when needed.
         if (hud != null && !hud.gameObject.scene.IsValid())
@@ -62,6 +65,21 @@ public class PlayerHUDController : MonoBehaviour
 
         if (movement != null)
             hud.SetStamina(movement.GetSprintCharge() / movement.GetMaxSprintCharge());
+
+        if (_sprayPaintMode != null)
+        {
+            hud.SetCrosshairMode(
+                _sprayPaintMode.GetCrosshairMode(),
+                _sprayPaintMode.SpraySize,
+                _sprayPaintMode.MinSpraySize,
+                _sprayPaintMode.MaxSpraySize,
+                _sprayPaintMode.MinCrosshairCirclePixels,
+                _sprayPaintMode.MaxCrosshairCirclePixels);
+        }
+        else
+        {
+            hud.SetCrosshairMode(CrosshairMode.Dot);
+        }
     }
 
     /// <summary>Hides main HUD bars while the handheld camera viewfinder is open.</summary>
@@ -103,10 +121,10 @@ public class PlayerHUDController : MonoBehaviour
     }
 
     /// <summary>Shows primary-use and drop key hints for the selected item.</summary>
-    public void SetItemKeyHints(bool visible, string line0, string line1 = null)
+    public void SetItemKeyHints(bool visible, string line0, string line1 = null, string line2 = null)
     {
         if (hud == null)
             return;
-        hud.SetItemKeyHints(visible, line0, line1);
+        hud.SetItemKeyHints(visible, line0, line1, line2);
     }
 }

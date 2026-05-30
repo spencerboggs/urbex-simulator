@@ -8,6 +8,7 @@ public static class InventoryItemCatalog
         {
             InventoryItemType.Camera => "Camera",
             InventoryItemType.Flashlight => "Flashlight",
+            InventoryItemType.SprayPaint => "Spray Paint",
             _ => string.Empty,
         };
     }
@@ -18,6 +19,7 @@ public static class InventoryItemCatalog
         return itemType switch
         {
             InventoryItemType.Flashlight => true,
+            InventoryItemType.SprayPaint => true,
             _ => false,
         };
     }
@@ -28,6 +30,7 @@ public static class InventoryItemCatalog
         return itemType switch
         {
             InventoryItemType.Flashlight => true,
+            InventoryItemType.SprayPaint => true,
             _ => false,
         };
     }
@@ -38,7 +41,21 @@ public static class InventoryItemCatalog
         return itemType switch
         {
             InventoryItemType.Flashlight => "Toggle Flashlight",
+            InventoryItemType.SprayPaint => "Spray Paint",
             _ => string.Empty,
         };
+    }
+
+    /// <summary>Optional third hint line for an item (e.g. scroll wheel actions).</summary>
+    public static bool TryGetExtraKeyHint(InventoryItemType itemType, out string hint)
+    {
+        if (itemType == InventoryItemType.SprayPaint)
+        {
+            hint = "Scroll - Adjust Spray Size";
+            return true;
+        }
+
+        hint = string.Empty;
+        return false;
     }
 }

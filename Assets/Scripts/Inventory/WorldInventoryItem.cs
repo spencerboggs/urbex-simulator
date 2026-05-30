@@ -198,10 +198,17 @@ public sealed class WorldInventoryItem : MonoBehaviour
     /// <summary>Attaches a procedural flashlight mesh when no art prefab visual exists.</summary>
     private void EnsureProceduralVisual()
     {
-        if (_itemType != InventoryItemType.Flashlight)
+        if (_itemType != InventoryItemType.Flashlight && _itemType != InventoryItemType.SprayPaint)
             return;
 
-        _visualRoot = FlashlightVisualFactory.EnsurePlaceholderVisual(transform);
+        if (_itemType == InventoryItemType.Flashlight)
+        {
+            _visualRoot = FlashlightVisualFactory.EnsurePlaceholderVisual(transform);
+        }
+        else
+        {
+            _visualRoot = SprayPaintVisualFactory.EnsurePlaceholderVisual(transform);
+        }
         if (_visualRoot == null)
             return;
 

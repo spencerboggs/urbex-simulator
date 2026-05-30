@@ -9,6 +9,44 @@
     justify-content: center;
 }
 
+.crosshairRoot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    picking-mode: Ignore;
+}
+
+.crosshairDot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.92);
+}
+
+.crosshairCircle {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.95);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.crosshairX {
+    display: none;
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.95);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin-top: -2px;
+}
+
 .cameraHintText {
     font-size: 13px;
     color: rgb(245, 245, 250);

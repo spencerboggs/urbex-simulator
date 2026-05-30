@@ -28,6 +28,9 @@ public class PlayerHUD : MonoBehaviour
     /// <summary>Second line of item key hints.</summary>
     private Label itemKeyHintLine1;
 
+    /// <summary>Third line of item key hints (e.g. scroll wheel).</summary>
+    private Label itemKeyHintLine2;
+
     /// <summary>Five hotbar slot visual elements.</summary>
     private VisualElement[] hotbarSlots;
 
@@ -37,6 +40,18 @@ public class PlayerHUD : MonoBehaviour
     /// <summary>Key badge labels per hotbar slot.</summary>
     private Label[] hotbarKeyLabels;
 
+    /// <summary>Crosshair container centered on screen.</summary>
+    private VisualElement crosshairRoot;
+
+    /// <summary>Default dot crosshair element.</summary>
+    private VisualElement crosshairDot;
+
+    /// <summary>Circle crosshair shown when spray paint is in range.</summary>
+    private VisualElement crosshairCircle;
+
+    /// <summary>X crosshair shown when spray paint is out of range.</summary>
+    private Label crosshairX;
+
     /// <summary>Lazy-queries UIDocument elements by name on first use.</summary>
     private void TryBindFills()
     {
@@ -45,7 +60,12 @@ public class PlayerHUD : MonoBehaviour
             hotbarRoot != null &&
             hotbarSlots != null &&
             hotbarItemLabels != null &&
-            hotbarKeyLabels != null)
+            hotbarKeyLabels != null &&
+            crosshairRoot != null &&
+            crosshairDot != null &&
+            crosshairCircle != null &&
+            crosshairX != null &&
+            itemKeyHintLine2 != null)
             return;
 
         var doc = GetComponent<UIDocument>();
@@ -73,6 +93,16 @@ public class PlayerHUD : MonoBehaviour
             itemKeyHintLine0 = root.Q<Label>("itemKeyHintLine0");
         if (itemKeyHintLine1 == null)
             itemKeyHintLine1 = root.Q<Label>("itemKeyHintLine1");
+        if (itemKeyHintLine2 == null)
+            itemKeyHintLine2 = root.Q<Label>("itemKeyHintLine2");
+        if (crosshairRoot == null)
+            crosshairRoot = root.Q<VisualElement>("crosshairRoot");
+        if (crosshairDot == null)
+            crosshairDot = root.Q<VisualElement>("crosshairDot");
+        if (crosshairCircle == null)
+            crosshairCircle = root.Q<VisualElement>("crosshairCircle");
+        if (crosshairX == null)
+            crosshairX = root.Q<Label>("crosshairX");
 
         // Resolve five hotbar slots and paired item/key labels.
         if (hotbarSlots == null || hotbarSlots.Length != 5)
@@ -146,7 +176,7 @@ public class PlayerHUD : MonoBehaviour
     }
 
     /// <summary>Shows item key hint lines below the hotbar.</summary>
-    public void SetItemKeyHints(bool visible, string line0, string line1 = null)
+    public void SetItemKeyHints(bool visible, string line0, string line1 = null, string line2 = null)
     {
         TryBindFills();
 
@@ -165,6 +195,43 @@ public class PlayerHUD : MonoBehaviour
             itemKeyHintLine1.text = line1 ?? string.Empty;
             itemKeyHintLine1.style.display =
                 visible && !string.IsNullOrEmpty(line1) ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        if (itemKeyHintLine2 != null)
+        {
+            itemKeyHintLine2.text = line2 ?? string.Empty;
+            itemKeyHintLine2.style.display =
+                visible && !string.IsNullOrEmpty(line2) ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+    }
+
+    /// <summary>Updates the centered crosshair for default aim or spray paint feedback.</summary>
+    public void SetCrosshairMode(
+        CrosshairMode mode,
+        float sprayDiameter = 0.18f,
+        float minSprayDiameter = 0.06f,
+        float maxSprayDiameter = 0.45f,
+        float minCrosshairCirclePixels = 10f,
+        float maxCrosshairCirclePixels = 30f)
+    {
+        TryBindFills();
+        if (crosshairDot == null || crosshairCircle == null || crosshairX == null)
+            return;
+
+        bool showDot = mode == CrosshairMode.Dot;
+        bool showCircle = mode == CrosshairMode.SprayInRange;
+        bool showX = mode == CrosshairMode.SprayOutOfRange;
+
+        crosshairDot.style.display = showDot ? DisplayStyle.Flex : DisplayStyle.None;
+        crosshairCircle.style.display = showCircle ? DisplayStyle.Flex : DisplayStyle.None;
+        crosshairX.style.display = showX ? DisplayStyle.Flex : DisplayStyle.None;
+
+        if (showCircle)
+        {
+            float t = Mathf.InverseLerp(minSprayDiameter, maxSprayDiameter, sprayDiameter);
+            float circlePixels = Mathf.Lerp(minCrosshairCirclePixels, maxCrosshairCirclePixels, t);
+            crosshairCircle.style.width = circlePixels;
+            crosshairCircle.style.height = circlePixels;
         }
     }
 
