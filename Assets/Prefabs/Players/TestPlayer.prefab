@@ -272,10 +272,12 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 2723982658518787085}
   _networkObjectCache: {fileID: 2723982658518787085}
-  _hasBackpack: 0
+  _hasBackpack: 1
   _slotsWithoutBackpack: 3
   _slotsWithBackpack: 5
   _startWithFlashlight: 1
+  _startWithSprayPaint: 1
+  _startWithPaintballGun: 1
   _selectedSlotIndex: -1
   _dropForwardDistance: 0.95
   _dropUpOffset: -0.08

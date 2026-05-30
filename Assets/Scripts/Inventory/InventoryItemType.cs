@@ -5,4 +5,5 @@ public enum InventoryItemType
     Camera = 1,
     Flashlight = 2,
     SprayPaint = 3,
+    PaintballGun = 4,
 }

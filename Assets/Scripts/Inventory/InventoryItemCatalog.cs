@@ -9,6 +9,7 @@ public static class InventoryItemCatalog
             InventoryItemType.Camera => "Camera",
             InventoryItemType.Flashlight => "Flashlight",
             InventoryItemType.SprayPaint => "Spray Paint",
+            InventoryItemType.PaintballGun => "Paintball Gun",
             _ => string.Empty,
         };
     }
@@ -20,6 +21,7 @@ public static class InventoryItemCatalog
         {
             InventoryItemType.Flashlight => true,
             InventoryItemType.SprayPaint => true,
+            InventoryItemType.PaintballGun => true,
             _ => false,
         };
     }
@@ -31,6 +33,7 @@ public static class InventoryItemCatalog
         {
             InventoryItemType.Flashlight => true,
             InventoryItemType.SprayPaint => true,
+            InventoryItemType.PaintballGun => true,
             _ => false,
         };
     }
@@ -42,6 +45,7 @@ public static class InventoryItemCatalog
         {
             InventoryItemType.Flashlight => "Toggle Flashlight",
             InventoryItemType.SprayPaint => "Spray Paint",
+            InventoryItemType.PaintballGun => "Shoot Paintball",
             _ => string.Empty,
         };
     }

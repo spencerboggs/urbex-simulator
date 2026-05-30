@@ -311,6 +311,9 @@ public class PlayerMovement : MonoBehaviour
     /// <summary>Updates backpack state for sprint multiplier selection.</summary>
     public void SetHasBackpack(bool hasBackpack) => _hasBackpack = hasBackpack;
 
+    /// <summary>Whether the movement backpack toggle is enabled on this prefab.</summary>
+    public bool IsBackpackEnabled => _hasBackpack;
+
     /// <summary>Removes sprint charge and marks exhausted at zero.</summary>
     public void DrainStamina(float amount)
     {

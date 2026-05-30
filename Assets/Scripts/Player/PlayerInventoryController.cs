@@ -36,6 +36,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     [SerializeField]
     private bool _startWithSprayPaint = true;
 
+    [SerializeField]
+    private bool _startWithPaintballGun = true;
+
     [Header("Selection")]
     [SerializeField]
     [Range(-1, 4)]
@@ -65,6 +68,8 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     private PlayerFlashlightMode _flashlightMode;
     /// <summary>Held spray paint can and painting when spray paint slot is selected.</summary>
     private PlayerSprayPaintMode _sprayPaintMode;
+    /// <summary>Held paintball gun and projectile firing when that slot is selected.</summary>
+    private PlayerPaintballGunMode _paintballGunMode;
     /// <summary>Movement used to sync backpack sprint multiplier.</summary>
     private PlayerMovement _movement;
     /// <summary>Gameplay camera used as drop spawn origin.</summary>
@@ -103,11 +108,16 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         _movement = GetComponent<PlayerMovement>();
         _gameplayCamera = GetComponentInChildren<Camera>(true);
 
+        SyncBackpackDefaultFromMovement();
+
         if (!TryGetComponent(out _flashlightMode))
             _flashlightMode = gameObject.AddComponent<PlayerFlashlightMode>();
 
         if (!TryGetComponent(out _sprayPaintMode))
             _sprayPaintMode = gameObject.AddComponent<PlayerSprayPaintMode>();
+
+        if (!TryGetComponent(out _paintballGunMode))
+            _paintballGunMode = gameObject.AddComponent<PlayerPaintballGunMode>();
 
         if (!TryGetComponent<PlayerInteractor>(out _))
             gameObject.AddComponent<PlayerInteractor>();
@@ -196,7 +206,27 @@ public sealed class PlayerInventoryController : NetworkBehaviour
             _slotItems[i] = InventoryItemType.None;
 
         _slotItems[0] = InventoryItemType.Camera;
+        _inventoryInitialized = true;
+        AssignMissingStarterItems();
+    }
 
+    /// <summary>
+    /// Pulls the backpack default from PlayerMovement when legacy prefabs only enable it there.
+    /// </summary>
+    private void SyncBackpackDefaultFromMovement()
+    {
+        if (_hasBackpack || _movement == null)
+            return;
+
+        if (_movement.IsBackpackEnabled)
+            _hasBackpack = true;
+    }
+
+    /// <summary>
+    /// Fills empty hotbar slots with configured starter items when backpack slots are available.
+    /// </summary>
+    private void AssignMissingStarterItems()
+    {
         if (_startWithFlashlight && !ContainsItem(InventoryItemType.Flashlight))
         {
             int defaultSlot = GetFirstAvailableInventorySlot();
@@ -211,7 +241,12 @@ public sealed class PlayerInventoryController : NetworkBehaviour
                 _slotItems[defaultSlot] = InventoryItemType.SprayPaint;
         }
 
-        _inventoryInitialized = true;
+        if (_startWithPaintballGun && !ContainsItem(InventoryItemType.PaintballGun))
+        {
+            int defaultSlot = GetFirstAvailableInventorySlot();
+            if (defaultSlot > 0)
+                _slotItems[defaultSlot] = InventoryItemType.PaintballGun;
+        }
     }
 
     /// <summary>Maps C and digit keys to hotbar slot toggle requests.</summary>
@@ -273,6 +308,9 @@ public sealed class PlayerInventoryController : NetworkBehaviour
         if (_sprayPaintMode != null)
             _sprayPaintMode.SetEquipped(selectedItem == InventoryItemType.SprayPaint);
 
+        if (_paintballGunMode != null)
+            _paintballGunMode.SetEquipped(selectedItem == InventoryItemType.PaintballGun);
+
         if (publishHud && ShouldPublishHud())
             PublishHotbarState();
     }
@@ -282,6 +320,8 @@ public sealed class PlayerInventoryController : NetworkBehaviour
     {
         if (_selectedSlotIndex >= AvailableSlots)
             _selectedSlotIndex = -1;
+
+        AssignMissingStarterItems();
 
         if (_movement != null)
             _movement.SetHasBackpack(_hasBackpack);
